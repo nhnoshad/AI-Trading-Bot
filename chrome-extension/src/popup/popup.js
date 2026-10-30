@@ -157,8 +157,27 @@ async function syncWithActiveTab(forceRescan = false) {
   }
 
   try {
-    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-    const tab = tabs[0];
+    const isBrokerUrl = (url) => /market-qx|quotex|qxbroker/i.test(url || '');
+    let tab = null;
+
+    // Check active tab first
+    const activeTabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (activeTabs[0] && isBrokerUrl(activeTabs[0].url)) {
+      tab = activeTabs[0];
+    } else {
+      // Find open Quotex / Market-QX tab across windows
+      const brokerTabs = await chrome.tabs.query({
+        url: [
+          '*://*.market-qx.info/*',
+          '*://*.quotex.com/*',
+          '*://*.quotex.io/*',
+          '*://*.qxbroker.com/*'
+        ]
+      });
+      if (brokerTabs && brokerTabs.length > 0) {
+        tab = brokerTabs[0];
+      }
+    }
 
     if (!tab || !tab.id) {
       safeStorageGet(['currentCandleState', 'lastSignal'], (data) => {
@@ -166,6 +185,14 @@ async function syncWithActiveTab(forceRescan = false) {
           renderCandlePredictionState(data.currentCandleState);
         } else if (data.lastSignal) {
           renderSignal(data.lastSignal);
+        } else {
+          renderCandlePredictionState({
+            pair: 'No Pair Detected',
+            signal: 'WAIT',
+            direction: 'WAIT',
+            confidence: 0,
+            reasons: ['Please open Quotex (market-qx.info) in a tab to begin scanning.']
+          });
         }
       });
       return;
@@ -174,8 +201,8 @@ async function syncWithActiveTab(forceRescan = false) {
     const msgType = forceRescan ? 'FORCE_RESCAN_PAIR' : 'GET_CANDLE_PREDICTION_STATE';
     let response = await sendMessagePromise(tab.id, { type: msgType });
 
-    // If content script was not injected or orphaned, inject it fresh
-    if ((!response || !response.success) && tab.url && !tab.url.startsWith('chrome://')) {
+    // If content script was not injected or orphaned, inject it ONLY on Quotex tabs
+    if ((!response || !response.success) && isBrokerUrl(tab.url)) {
       try {
         await chrome.scripting.insertCSS({
           target: { tabId: tab.id },
@@ -702,9 +729,28 @@ function openDashboard() {
 async function sendMessageToContent(msg) {
   if (!isContextValid()) return;
   try {
-    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tabs[0]) {
-      chrome.tabs.sendMessage(tabs[0].id, msg, () => {
+    const isBrokerUrl = (url) => /market-qx|quotex|qxbroker/i.test(url || '');
+    let targetTabId = null;
+
+    const activeTabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (activeTabs[0] && isBrokerUrl(activeTabs[0].url)) {
+      targetTabId = activeTabs[0].id;
+    } else {
+      const brokerTabs = await chrome.tabs.query({
+        url: [
+          '*://*.market-qx.info/*',
+          '*://*.quotex.com/*',
+          '*://*.quotex.io/*',
+          '*://*.qxbroker.com/*'
+        ]
+      });
+      if (brokerTabs && brokerTabs.length > 0) {
+        targetTabId = brokerTabs[0].id;
+      }
+    }
+
+    if (targetTabId) {
+      chrome.tabs.sendMessage(targetTabId, msg, () => {
         if (chrome.runtime.lastError) {}
       });
     }
