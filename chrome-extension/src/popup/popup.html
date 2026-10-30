@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Trading Signal Bot</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo">
+        <span class="logo-icon">🤖</span>
+        <span class="logo-text">AI Trading Bot</span>
+      </div>
+      <div class="status-badge running" id="botStatus">▶ ACTIVE</div>
+    </header>
+
+    <!-- Signal Display -->
+    <div class="signal-card" id="signalCard">
+      <div class="signal-label" id="signalLabel">NEXT CANDLE PREDICTION</div>
+      <div class="signal-value" id="signalValue">🔍 SCANNING...</div>
+      <div id="signalPredAction" style="font-size:11px; font-weight:700; color:#fff; margin-top:2px;">Next candle direction</div>
+      <div id="signalExpiry" style="display:inline-block; margin-top:4px; padding:2px 7px; background:rgba(0,212,255,0.12); border:1px solid rgba(0,212,255,0.3); border-radius:4px; font-size:10px; font-weight:800; color:#00d4ff;">⏱️ Duration: 1m (60s)</div>
+      <div class="signal-pair" id="signalPair" style="margin-top:6px;">Detecting pair from page...</div>
+
+      <!-- Current Candle Position Box -->
+      <div id="signalCandleCard" style="margin-top:8px; background:#111124; border:1px solid #23233c; border-radius:6px; padding:6px; font-size:10px; text-align:left;">
+        <div id="signalCandleState" style="font-weight:800; color:#00ff88;">Current Candle: Analyzing...</div>
+        <div id="signalCandleOhlc" style="font-size:9px; color:#888; font-family:monospace; margin-top:2px;">O: -- | H: -- | L: -- | C: --</div>
+        <div id="signalCandlePos" style="font-size:9px; color:#bbb; margin-top:2px;">Position: Scanning chart...</div>
+      </div>
+
+      <div class="confidence-section" style="margin-top:8px;">
+        <span class="conf-label">Confidence</span>
+        <div class="confidence-bar">
+          <div class="confidence-fill" id="confidenceFill" style="width:0%"></div>
+        </div>
+        <span class="conf-value" id="confidenceValue">--</span>
+      </div>
+      <div class="indicator-pills" id="indicatorPills"></div>
+      <div id="signalReasons" style="margin-top:8px; font-size:10px; color:#aaa; text-align:left;"></div>
+    </div>
+
+    <!-- Instant Scan Button -->
+    <button id="btnScanNow" style="width:100%; padding:9px; border:none; border-radius:8px; background:linear-gradient(135deg, #00d4ff, #0077ff); color:#fff; font-weight:800; font-size:12px; cursor:pointer; letter-spacing:0.5px;">
+      🔍 SCAN SELECTED PAIR NOW
+    </button>
+
+    <!-- AI Mode Badge -->
+    <div style="background:#1a1a2e; border-radius:8px; padding:8px 12px; display:flex; justify-content:space-between; align-items:center;">
+      <span style="font-size:11px; color:#888;">AI Mode:</span>
+      <span style="background:rgba(0,255,136,0.15); border:1px solid rgba(0,255,136,0.3); color:#00ff88; padding:3px 8px; border-radius:12px; font-weight:800; font-size:11px;">🧠 CANDLE PREDICTOR & LEARNER</span>
+    </div>
+
+    <!-- Prediction & Server Settings -->
+    <div class="settings-section">
+      <div class="setting-row">
+        <label>Candle Timeframe</label>
+        <select id="tradeDuration">
+          <option value="60" selected>1 Minute (60s)</option>
+          <option value="300">5 Minutes (300s)</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <label>Min Confidence (%)</label>
+        <div class="slider-row">
+          <input type="range" id="minConfidence" min="50" max="90" value="60" step="5">
+          <span id="minConfidenceVal">60%</span>
+        </div>
+      </div>
+      <div class="setting-row">
+        <label>ML Server URL</label>
+        <input type="text" id="serverUrl" value="http://localhost:8000" placeholder="http://localhost:8000">
+      </div>
+    </div>
+
+    <!-- Control Buttons -->
+    <div class="control-buttons">
+      <button class="btn-start" id="btnStart">▶ START AI BOT</button>
+      <button class="btn-stop" id="btnStop">⏹ STOP AI BOT</button>
+    </div>
+
+    <!-- Stats Section -->
+    <div class="stats-section">
+      <div class="stats-title">🧠 AI Candle Prediction & Learning Accuracy</div>
+      <div class="stats-grid">
+        <div class="stat-item">
+          <div class="stat-val" id="statTrades">0</div>
+          <div class="stat-lbl">Evaluated</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-val green" id="statWins">0</div>
+          <div class="stat-lbl">Correct</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-val red" id="statLosses">0</div>
+          <div class="stat-lbl">Incorrect</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-val" id="statWinRate">0%</div>
+          <div class="stat-lbl">Accuracy</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-val" id="statPnl">Active</div>
+          <div class="stat-lbl">Ensemble</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-val" id="statStreak">-</div>
+          <div class="stat-lbl">Streak</div>
+        </div>
+      </div>
+      <div id="statLearningNote" style="margin-top:6px; font-size:10px; color:#00d4ff; text-align:center; background:rgba(0,212,255,0.08); padding:4px 6px; border-radius:4px;">
+        Auto-learning active • Model weights adapt from every candle outcome
+      </div>
+    </div>
+
+    <!-- Connection Status -->
+    <div class="connection-row">
+      <span class="conn-dot" id="connDot">●</span>
+      <span id="connStatus">Checking ML server...</span>
+      <button class="test-btn" id="btnTestConn">Test</button>
+      <button class="test-btn" id="btnExportCsv" title="Export last 50 signals to CSV">📥 CSV</button>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <a href="#" id="linkDashboard">📈 Open Web Dashboard</a>
+      <span class="version">v1.1.0</span>
+    </footer>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

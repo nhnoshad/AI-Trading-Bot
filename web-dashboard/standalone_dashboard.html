@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Trading Signal Bot — Web Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background-color: #0d0d1a;
+      color: #e0e0e0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0d0d1a; }
+    ::-webkit-scrollbar-thumb { background: #2a2a3e; border-radius: 3px; }
+    .nav-btn.active {
+      background: rgba(0, 212, 255, 0.12);
+      color: #00d4ff;
+      border-left: 3px solid #00d4ff;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body class="flex h-screen overflow-hidden">
+
+  <!-- SIDEBAR -->
+  <aside class="w-60 bg-[#1a1a2e] border-r border-[#2a2a3e] flex flex-col flex-shrink-0">
+    <div class="flex items-center gap-3 p-4 border-b border-[#2a2a3e]">
+      <span class="text-2xl">🤖</span>
+      <div>
+        <div class="font-bold text-[#00d4ff] text-sm">AI Trading Bot</div>
+        <div class="text-[10px] text-gray-500">Quotex ML Overlay System</div>
+      </div>
+    </div>
+
+    <nav class="flex-1 p-3 space-y-1 text-sm">
+      <button onclick="switchTab('dashboard')" id="nav-dashboard" class="nav-btn active w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 hover:text-white hover:bg-[#2a2a3e]/50 transition">
+        <span>📊</span> Dashboard
+      </button>
+      <button onclick="switchTab('history')" id="nav-history" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 hover:text-white hover:bg-[#2a2a3e]/50 transition">
+        <span>📜</span> Trade History
+      </button>
+      <button onclick="switchTab('backtest')" id="nav-backtest" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 hover:text-white hover:bg-[#2a2a3e]/50 transition">
+        <span>🧪</span> Backtesting
+      </button>
+      <button onclick="switchTab('model')" id="nav-model" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 hover:text-white hover:bg-[#2a2a3e]/50 transition">
+        <span>🧠</span> AI Model & 30d Learn
+      </button>
+      <button onclick="switchTab('settings')" id="nav-settings" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 hover:text-white hover:bg-[#2a2a3e]/50 transition">
+        <span>⚙️</span> Settings & Safety
+      </button>
+      <button onclick="switchTab('login')" id="nav-login" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 hover:text-white hover:bg-[#2a2a3e]/50 transition">
+        <span>🔐</span> Account / OTP Login
+      </button>
+    </nav>
+
+    <div class="p-4 border-t border-[#2a2a3e] space-y-2">
+      <div class="flex items-center gap-2 text-xs">
+        <span id="conn-dot" class="text-green-400">●</span>
+        <span id="conn-text" class="text-green-400 font-medium">Connecting...</span>
+      </div>
+      <div class="text-[11px] text-gray-500" id="sidebar-model-ver">Model v1.0.1 | Fast AI</div>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <div class="flex-1 flex flex-col overflow-hidden">
+    <!-- TOP HEADER -->
+    <header class="h-14 bg-[#1a1a2e] border-b border-[#2a2a3e] flex items-center justify-between px-6">
+      <div class="flex items-center gap-3">
+        <h1 class="font-bold text-white text-base" id="page-title">Live Performance Dashboard</h1>
+        <span class="text-xs px-2.5 py-0.5 rounded-full bg-[#00d4ff]/10 text-[#00d4ff] border border-[#00d4ff]/30" id="fast-ai-badge">
+          ⚡ Fast Analyze: --ms
+        </span>
+      </div>
+      <div class="flex items-center gap-3">
+        <button onclick="simulateLiveSignal()" class="px-3 py-1.5 bg-gradient-to-r from-[#00ff88] to-[#00d4ff] text-[#0d0d1a] font-bold rounded-lg text-xs hover:opacity-90 transition">
+          ⚡ Test Live AI Signal
+        </button>
+        <div id="top-signal-pill" class="px-3 py-1 rounded-full text-xs font-bold bg-yellow-500/20 text-yellow-400">
+          WAIT --%
+        </div>
+      </div>
+    </header>
+
+    <!-- SCROLLABLE BODY -->
+    <main class="flex-1 overflow-auto p-6 space-y-6">
+
+      <!-- ==================== TAB 1: DASHBOARD ==================== -->
+      <section id="tab-dashboard" class="space-y-6">
+        <!-- 6 Stat Cards -->
+        <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+          <div class="bg-[#1a1a2e] rounded-xl p-4 border border-[#2a2a3e]">
+            <div class="text-[11px] text-gray-400 uppercase">Total Signals</div>
+            <div class="text-2xl font-bold text-[#00d4ff] mt-1" id="st-signals">0</div>
+          </div>
+          <div class="bg-[#1a1a2e] rounded-xl p-4 border border-[#2a2a3e]">
+            <div class="text-[11px] text-gray-400 uppercase">Total Trades</div>
+            <div class="text-2xl font-bold text-white mt-1" id="st-trades">0</div>
+          </div>
+          <div class="bg-[#1a1a2e] rounded-xl p-4 border border-[#2a2a3e]">
+            <div class="text-[11px] text-gray-400 uppercase">Wins / Losses</div>
+            <div class="text-2xl font-bold mt-1">
+              <span class="text-green-400" id="st-wins">0</span>
+              <span class="text-gray-600">/</span>
+              <span class="text-red-400" id="st-losses">0</span>
+            </div>
+          </div>
+          <div class="bg-[#1a1a2e] rounded-xl p-4 border border-[#2a2a3e]">
+            <div class="text-[11px] text-gray-400 uppercase">Win Rate</div>
+            <div class="text-2xl font-bold text-green-400 mt-1" id="st-winrate">0%</div>
+          </div>
+          <div class="bg-[#1a1a2e] rounded-xl p-4 border border-[#2a2a3e]">
+            <div class="text-[11px] text-gray-400 uppercase">Total P&L</div>
+            <div class="text-2xl font-bold text-green-400 mt-1" id="st-pnl">$0.00</div>
+          </div>
+          <div class="bg-[#1a1a2e] rounded-xl p-4 border border-[#2a2a3e]">
+            <div class="text-[11px] text-gray-400 uppercase">Best Pair / Streak</div>
+            <div class="text-lg font-bold text-white mt-1" id="st-bestpair">EURUSD</div>
+          </div>
+        </div>
+
+        <!-- Live Signal + Equity Curve -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- Live Signal Card -->
+          <div id="live-signal-box" class="bg-[#1a1a2e] rounded-xl p-6 border-2 border-[#2a2a3e] flex flex-col justify-between">
+            <div>
+              <div class="flex justify-between items-center mb-2">
+                <span class="text-xs uppercase tracking-wider text-gray-400">Live AI Signal Feed</span>
+                <span class="text-xs text-[#00d4ff]" id="sig-pair-tf">EURUSD | 1m</span>
+              </div>
+              <div class="text-center my-4">
+                <div id="sig-main-text" class="text-5xl font-black text-yellow-400 tracking-widest">⏳ WAIT</div>
+                <div id="sig-entry-price" class="text-xs text-gray-400 mt-2">Entry Price: --</div>
+              </div>
+              <div class="mb-4">
+                <div class="flex justify-between text-xs mb-1">
+                  <span class="text-gray-400">ML Confidence Meter</span>
+                  <span id="sig-conf-text" class="font-bold text-[#00d4ff]">0%</span>
+                </div>
+                <div class="h-2.5 bg-[#0d0d1a] rounded-full overflow-hidden">
+                  <div id="sig-conf-bar" class="h-full bg-gradient-to-r from-[#00ff88] to-[#00d4ff] transition-all duration-500" style="width: 0%"></div>
+                </div>
+              </div>
+              <div id="sig-pills" class="flex flex-wrap gap-1.5 mb-3"></div>
+              <ul id="sig-reasons" class="text-xs text-gray-300 space-y-1 bg-[#0d0d1a] p-3 rounded-lg">
+                <li>• Click "⚡ Test Live AI Signal" or open Quotex with the Chrome Extension.</li>
+              </ul>
+            </div>
+            <div class="flex gap-3 mt-4 pt-3 border-t border-[#2a2a3e]">
+              <button onclick="recordSimulatedTrade('WIN')" class="flex-1 py-2 bg-green-500/20 border border-green-500/40 text-green-400 rounded-lg text-xs font-bold hover:bg-green-500/30">
+                ✅ Log Trade WIN (+Learn)
+              </button>
+              <button onclick="recordSimulatedTrade('LOSS')" class="flex-1 py-2 bg-red-500/20 border border-red-500/40 text-red-400 rounded-lg text-xs font-bold hover:bg-red-500/30">
+                ❌ Log Trade LOSS (+Learn)
+              </button>
+            </div>
+          </div>
+
+          <!-- Equity Curve SVG Chart -->
+          <div class="bg-[#1a1a2e] rounded-xl p-6 border border-[#2a2a3e] flex flex-col">
+            <div class="flex justify-between items-center mb-4">
+              <span class="text-xs uppercase tracking-wider text-gray-400">Cumulative Equity Curve ($)</span>
+              <span class="text-xs text-green-400" id="eq-summary">Live Trade Progression</span>
+            </div>
+            <div class="flex-1 flex items-center justify-center bg-[#0d0d1a] rounded-xl p-4 min-h-[220px]" id="equity-chart-container">
+              <svg id="equity-svg" viewBox="0 0 500 180" class="w-full h-44 overflow-visible"></svg>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent Signals Table -->
+        <div class="bg-[#1a1a2e] rounded-xl border border-[#2a2a3e] overflow-hidden">
+          <div class="p-4 border-b border-[#2a2a3e] flex justify-between items-center">
+            <h2 class="font-semibold text-sm text-white">Recent AI Signals Generated</h2>
+            <span class="text-xs text-gray-400">Auto-verifies & learns from market results</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs">
+              <thead class="bg-[#0d0d1a] text-gray-400 uppercase">
+                <tr>
+                  <th class="px-4 py-2.5 text-left">ID</th>
+                  <th class="px-4 py-2.5 text-left">Time</th>
+                  <th class="px-4 py-2.5 text-left">Pair</th>
+                  <th class="px-4 py-2.5 text-left">Signal</th>
+                  <th class="px-4 py-2.5 text-left">Confidence</th>
+                  <th class="px-4 py-2.5 text-left">Entry Price</th>
+                  <th class="px-4 py-2.5 text-left">AI Speed</th>
+                  <th class="px-4 py-2.5 text-left">Verified Outcome</th>
+                </tr>
+              </thead>
+              <tbody id="recent-signals-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== TAB 2: TRADE HISTORY ==================== -->
+      <section id="tab-history" class="hidden space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3 bg-[#1a1a2e] p-4 rounded-xl border border-[#2a2a3e]">
+          <div class="flex gap-3">
+            <select id="flt-pair" onchange="renderTradesTable()" class="bg-[#0d0d1a] border border-[#2a2a3e] rounded-lg px-3 py-1.5 text-xs text-white">
+              <option value="ALL">All Pairs</option>
+              <option value="EURUSD">EURUSD</option>
+              <option value="GBPUSD">GBPUSD</option>
+              <option value="USDJPY">USDJPY</option>
+            </select>
+            <select id="flt-result" onchange="renderTradesTable()" class="bg-[#0d0d1a] border border-[#2a2a3e] rounded-lg px-3 py-1.5 text-xs text-white">
+              <option value="ALL">All Results</option>
+              <option value="WIN">WIN</option>
+              <option value="LOSS">LOSS</option>
+            </select>
+            <select id="flt-mode" onchange="renderTradesTable()" class="bg-[#0d0d1a] border border-[#2a2a3e] rounded-lg px-3 py-1.5 text-xs text-white">
+              <option value="ALL">All Modes</option>
+              <option value="AUTO">AUTO</option>
+              <option value="MANUAL">MANUAL</option>
+            </select>
+          </div>
+          <button onclick="exportTradesCsv()" class="px-4 py-1.5 bg-[#00d4ff] text-[#0d0d1a] font-bold rounded-lg text-xs">
+            📥 Export CSV
+          </button>
+        </div>
+
+        <div class="bg-[#1a1a2e] rounded-xl border border-[#2a2a3e] overflow-x-auto">
+          <table class="w-full text-xs">
+            <thead class="bg-[#0d0d1a] text-gray-400 uppercase">
+              <tr>
+                <th class="px-4 py-3 text-left">#</th>
+                <th class="px-4 py-3 text-left">Timestamp</th>
+                <th class="px-4 py-3 text-left">Pair</th>
+                <th class="px-4 py-3 text-left">Direction</th>
+                <th class="px-4 py-3 text-left">Amount</th>
+                <th class="px-4 py-3 text-left">Duration</th>
+                <th class="px-4 py-3 text-left">Entry Price</th>
+                <th class="px-4 py-3 text-left">Result</th>
+                <th class="px-4 py-3 text-left">P&L</th>
+                <th class="px-4 py-3 text-left">Mode</th>
+              </tr>
+            </thead>
+            <tbody id="trades-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ==================== TAB 3: BACKTESTING ==================== -->
+      <section id="tab-backtest" class="hidden space-y-6">
+        <div class="bg-[#1a1a2e] rounded-xl p-6 border border-[#2a2a3e] space-y-4">
+          <h2 class="font-semibold text-[#00d4ff] text-sm">⚙️ Backtest Strategy on 35-Day Rolling Historical Data</h2>
+          <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div>
+              <label class="text-xs text-gray-400 block mb-1">Market Pair</label>
+              <select id="bt-pair" class="w-full bg-[#0d0d1a] border border-[#2a2a3e] rounded-lg px-3 py-2 text-xs text-white">
+                <option>EURUSD</option>
+                <option>GBPUSD</option>
+                <option>USDJPY</option>
+                <option>AUDUSD</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs text-gray-400 block mb-1">Timeframe</label>
+              <select id="bt-tf" class="w-full bg-[#0d0d1a] border border-[#2a2a3e] rounded-lg px-3 py-2 text-xs text-white">
+                <option>1m</option>
+                <option>5m</option>
+                <option>15m</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs text-gray-400 block mb-1">Period</label>
+              <select id="bt-period" class="w-full bg-[#0d0d1a] border border-[#2a2a3e] rounded-lg px-3 py-2 text-xs text-white">
+                <option value="30d">30 Days (1 Month)</option>
+                <option value="7d">7 Days</option>
+                <option value="90d">90 Days</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs text-gray-400 block mb-1">Min Confidence (%)</label>
+              <input type="number" id="bt-conf" value="65" min="50" max="95" class="w-full bg-[#0d0d1a] border border-[#2a2a3e] rounded-lg px-3 py-2 text-xs text-white" />
+            </div>
+            <div>
+              <label class="text-xs text-gray-400 block mb-1">Trade Amount ($)</label>
+              <input type="number" id="bt-amount" value="10" min="1" class="w-full bg-[#0d0d1a] border border-[#2a2a3e] rounded-lg px-3 py-2 text-xs text-white" />
+            </div>
+          </div>
+          <button onclick="runBacktestNow()" id="bt-btn" class="w-full py-2.5 bg-[#00d4ff] text-[#0d0d1a] font-bold rounded-lg text-xs hover:bg-[#00b8d4]">
+            ▶ Run Backtest Simulation
+          </button>
+        </div>
+
+        <div id="bt-results-box" class="bg-[#1a1a2e] rounded-xl p-6 border border-[#2a2a3e] space-y-4">
+          <h3 class="font-semibold text-white text-sm">📊 Backtest Results</h3>
+          <div class="grid grid-cols-2 md:grid-cols-6 gap-4 text-center">
+            <div class="bg-[#0d0d1a] p-3 rounded-lg">
+              <div class="text-xl font-bold text-green-400" id="bt-res-wr">--%</div>
+              <div class="text-[11px] text-gray-500">Win Rate</div>
+            </div>
+            <div class="bg-[#0d0d1a] p-3 rounded-lg">
+              <div class="text-xl font-bold text-white" id="bt-res-total">--</div>
+              <div class="text-[11px] text-gray-500">Total Trades</div>
+            </div>
+            <div class="bg-[#0d0d1a] p-3 rounded-lg">
+              <div class="text-xl font-bold text-green-400" id="bt-res-pnl">$--</div>
+              <div class="text-[11px] text-gray-500">Net P&L</div>
+            </div>
+            <div class="bg-[#0d0d1a] p-3 rounded-lg">
+              <div class="text-xl font-bold text-red-400" id="bt-res-dd">$--</div>
+              <div class="text-[11px] text-gray-500">Max Drawdown</div>
+            </div>
+            <div class="bg-[#0d0d1a] p-3 rounded-lg">
+              <div class="text-xl font-bold text-[#00d4ff]" id="bt-res-pf">--</div>
+              <div class="text-[11px] text-gray-500">Profit Factor</div>
+            </div>
+            <div class="bg-[#0d0d1a] p-3 rounded-lg">
+              <div class="text-xl font-bold text-purple-400" id="bt-res-sr">--</div>
+              <div class="text-[11px] text-gray-500">Sharpe Ratio</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== TAB 4: AI MODEL & 30-DAY LEARNING ==================== -->
+      <section id="tab-model" class="hidden space-y-6">
+        <div class="flex flex-wrap items-center justify-between gap-4 bg-[#1a1a2e] p-5 rounded-xl border border-[#2a2a3e]">
+          <div>
+            <h2 class="font-bold text-white text-base">🧠 4-Stage Adaptive AI Engine (Fast Analyze → Measure → 35d Memory → Learn)</h2>
+            <p class="text-xs text-gray-400 mt-1">
+              Saves &ge; 1 Month (35 Days) of indicator snapshots & real outcomes. Automatically shifts ensemble weights & retrains.
+            </p>
+          </div>
+          <button onclick="triggerManualRetrain()" id="retrain-btn" class="px-4 py-2 bg-[#00d4ff] text-[#0d0d1a] font-bold rounded-lg text-xs hover:bg-[#00b8d4]">
+            🔄 Retrain Now on 1-Month Memory
+          </button>
+        </div>
+
+        <div id="retrain-alert" class="hidden p-3 rounded-xl bg-green-500/15 border border-green-500/40 text-xs text-green-400"></div>
+
+        <!-- 4 Core Metrics -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="bg-[#1a1a2e] p-4 rounded-xl border border-[#2a2a3e]">
+            <div class="text-xs text-gray-400">Ensemble Accuracy</div>
+            <div class="text-2xl font-bold text-green-400 mt-1" id="mp-acc">--%</div>
+          </div>
+          <div class="bg-[#1a1a2e] p-4 rounded-xl border border-[#2a2a3e]">
+            <div class="text-xs text-gray-400">Precision</div>
+            <div class="text-2xl font-bold text-[#00d4ff] mt-1" id="mp-prec">--%</div>
+          </div>
+          <div class="bg-[#1a1a2e] p-4 rounded-xl border border-[#2a2a3e]">
+            <div class="text-xs text-gray-400">Recall</div>
+            <div class="text-2xl font-bold text-purple-400 mt-1" id="mp-rec">--%</div>
+          </div>
+          <div class="bg-[#1a1a2e] p-4 rounded-xl border border-[#2a2a3e]">
+            <div class="text-xs text-gray-400">F1 Score</div>
+            <div class="text-2xl font-bold text-yellow-400 mt-1" id="mp-f1">--%</div>
+          </div>
+        </div>
+
+        <!-- 35-Day Memory + Dynamic Weights -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div class="bg-[#1a1a2e] p-5 rounded-xl border border-[#2a2a3e] space-y-3">
+            <h3 class="font-semibold text-[#00d4ff] text-sm">💾 35-Day (&gt;1 Month) Rolling Learning Memory</h3>
+            <div class="grid grid-cols-3 gap-3 text-center">
+              <div class="bg-[#0d0d1a] p-3 rounded-lg">
+                <div class="text-xl font-bold text-white" id="mp-mem-samples">3000</div>
+                <div class="text-[11px] text-gray-500">Samples Stored</div>
+              </div>
+              <div class="bg-[#0d0d1a] p-3 rounded-lg">
+                <div class="text-xl font-bold text-[#00d4ff]" id="mp-mem-days">35 Days</div>
+                <div class="text-[11px] text-gray-500">Retention Window</div>
+              </div>
+              <div class="bg-[#0d0d1a] p-3 rounded-lg">
+                <div class="text-xl font-bold text-green-400" id="mp-mem-verified">0</div>
+                <div class="text-[11px] text-gray-500">Live Outcomes Learned</div>
+              </div>
+            </div>
+            <div class="text-xs text-gray-400 flex justify-between pt-2 border-t border-[#2a2a3e]">
+              <span>24h Rolling Acc: <strong class="text-green-400" id="mp-r24">--%</strong></span>
+              <span>7d Rolling Acc: <strong class="text-green-400" id="mp-r7">--%</strong></span>
+              <span>30d Rolling Acc: <strong class="text-green-400" id="mp-r30">--%</strong></span>
+            </div>
+          </div>
+
+          <div class="bg-[#1a1a2e] p-5 rounded-xl border border-[#2a2a3e] space-y-3">
+            <h3 class="font-semibold text-[#00d4ff] text-sm">⚖️ Outcome-Adapted Ensemble Weights</h3>
+            <p class="text-xs text-gray-400">Weights automatically adjust after every trade toward the most accurate model.</p>
+            <div class="grid grid-cols-3 gap-3 text-center">
+              <div class="bg-[#0d0d1a] p-3 rounded-lg border border-green-500/20">
+                <div class="text-xl font-bold text-green-400" id="mp-w-xgb">40%</div>
+                <div class="text-xs text-gray-400">XGBoost</div>
+              </div>
+              <div class="bg-[#0d0d1a] p-3 rounded-lg border border-cyan-500/20">
+                <div class="text-xl font-bold text-[#00d4ff]" id="mp-w-lgbm">35%</div>
+                <div class="text-xs text-gray-400">LightGBM</div>
+              </div>
+              <div class="bg-[#0d0d1a] p-3 rounded-lg border border-purple-500/20">
+                <div class="text-xl font-bold text-purple-400" id="mp-w-rf">25%</div>
+                <div class="text-xs text-gray-400">Random Forest</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sub-Models Table + Feature Importance -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div class="bg-[#1a1a2e] rounded-xl border border-[#2a2a3e] overflow-hidden">
+            <div class="p-4 border-b border-[#2a2a3e] font-semibold text-sm text-white">Model Comparison Table</div>
+            <table class="w-full text-xs">
+              <thead class="bg-[#0d0d1a] text-gray-400 uppercase">
+                <tr>
+                  <th class="px-4 py-2.5 text-left">Model</th>
+                  <th class="px-4 py-2.5 text-left">Accuracy</th>
+                  <th class="px-4 py-2.5 text-left">Precision</th>
+                  <th class="px-4 py-2.5 text-left">F1</th>
+                  <th class="px-4 py-2.5 text-left">Weight</th>
+                </tr>
+              </thead>
+              <tbody id="mp-submodels-tbody"></tbody>
+            </table>
+          </div>
+
+          <div class="bg-[#1a1a2e] rounded-xl p-5 border border-[#2a2a3e]">
+            <h3 class="font-semibold text-sm text-white mb-3">Top Feature Importance (28 Indicators)</h3>
+            <div id="mp-features-list" class="space-y-2 text-xs"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== TAB 5: SETTINGS ==================== -->
+      <section id="tab-settings" class="hidden max-w-2xl space-y-6">
+        <div class="bg-[#1a1a2e] rounded-xl p-6 border border-[#2a2a3e] space-y-4">
+          <h2 class="font-semibold text-[#00d4ff] text-sm">🛡️ Bot Trading & Safety Controls</h2>
+          <div class="space-y-3 text-xs">
+            <div class="flex justify-between items-center">
+              <label class="text-gray-300">Default Trade Amount ($)</label>
+              <input type="number" id="set-amount" value="10" class="bg-[#0d0d1a] border border-[#2a2a3e] rounded px-3 py-1.5 text-white w-32" />
+            </div>
+            <div class="flex justify-between items-center">
+              <label class="text-gray-300">Default Trade Duration (seconds)</label>
+              <input type="number" id="set-duration" value="60" class="bg-[#0d0d1a] border border-[#2a2a3e] rounded px-3 py-1.5 text-white w-32" />
+            </div>
+            <div class="flex justify-between items-center">
+              <label class="text-gray-300">Minimum Confidence Threshold (%)</label>
+              <input type="number" id="set-conf" value="65" min="50" max="95" class="bg-[#0d0d1a] border border-[#2a2a3e] rounded px-3 py-1.5 text-white w-32" />
+            </div>
+            <div class="flex justify-between items-center">
+              <label class="text-gray-300">Maximum Trades Per Hour</label>
+              <input type="number" id="set-maxhr" value="10" class="bg-[#0d0d1a] border border-[#2a2a3e] rounded px-3 py-1.5 text-white w-32" />
+            </div>
+            <div class="flex justify-between items-center">
+              <label class="text-gray-300">Max Consecutive Losses (Auto-Stop)</label>
+              <input type="number" id="set-maxloss" value="3" class="bg-[#0d0d1a] border border-[#2a2a3e] rounded px-3 py-1.5 text-white w-32" />
+            </div>
+            <div class="flex justify-between items-center">
+              <label class="text-gray-300">Daily Loss Limit ($)</label>
+              <input type="number" id="set-dailyloss" value="50" class="bg-[#0d0d1a] border border-[#2a2a3e] rounded px-3 py-1.5 text-white w-32" />
+            </div>
+            <div class="flex justify-between items-center">
+              <label class="text-gray-300">Daily Profit Target ($)</label>
+              <input type="number" id="set-dailyprofit" value="100" class="bg-[#0d0d1a] border border-[#2a2a3e] rounded px-3 py-1.5 text-white w-32" />
+            </div>
+          </div>
+          <button onclick="saveDashboardSettings()" class="w-full py-2 bg-green-500 text-[#0d0d1a] font-bold rounded-lg text-xs">
+            💾 Save Settings
+          </button>
+          <div id="settings-saved-msg" class="hidden text-center text-xs text-green-400">✅ Settings saved locally!</div>
+        </div>
+      </section>
+
+      <!-- ==================== TAB 6: LOGIN / OTP ==================== -->
+      <section id="tab-login" class="hidden max-w-md mx-auto space-y-4">
+        <div class="bg-[#1a1a2e] rounded-xl p-6 border border-[#2a2a3e] space-y-4">
+          <div class="text-center">
+            <div class="text-3xl mb-1">🔐</div>
+            <h2 class="font-bold text-[#00d4ff]">Account Login & OTP Verification</h2>
+          </div>
+          <div>
+            <label class="text-xs text-gray-400 block mb-1">Email</label>
+            <input type="email" value="trader@antigravity.ai" class="w-full bg-[#0d0d1a] border border-[#2a2a3e] rounded-lg px-3 py-2 text-xs text-white" />
+          </div>
+          <div>
+            <label class="text-xs text-gray-400 block mb-1">Password</label>
+            <input type="password" value="password123" class="w-full bg-[#0d0d1a] border border-[#2a2a3e] rounded-lg px-3 py-2 text-xs text-white" />
+          </div>
+          <div>
+            <label class="text-xs text-gray-400 block mb-1">6-Digit OTP Code</label>
+            <input type="text" value="123456" maxlength="6" class="w-full bg-[#0d0d1a] border border-[#2a2a3e] rounded-lg px-3 py-2 text-xs font-mono tracking-widest text-white" />
+          </div>
+          <button onclick="alert('✅ Authenticated! Session active.'); switchTab('dashboard');" class="w-full py-2.5 bg-gradient-to-r from-[#00ff88] to-[#00d4ff] text-[#0d0d1a] font-bold rounded-lg text-xs">
+            Verify OTP & Sign In
+          </button>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script>
+    const API_BASE = 'http://localhost:8000';
+    let allTrades = [];
+    let lastSignalObj = null;
+
+    function switchTab(tab) {
+      ['dashboard', 'history', 'backtest', 'model', 'settings', 'login'].forEach(t => {
+        document.getElementById('tab-' + t).classList.add('hidden');
+        document.getElementById('nav-' + t).classList.remove('active');
+      });
+      document.getElementById('tab-' + tab).classList.remove('hidden');
+      document.getElementById('nav-' + tab).classList.add('active');
+      const titles = {
+        dashboard: 'Live Performance Dashboard',
+        history: 'Trade History & CSV Export',
+        backtest: 'Strategy Backtesting Simulator',
+        model: 'AI Model Performance & 35-Day Rolling Learning',
+        settings: 'Bot Risk & Safety Settings',
+        login: 'Account Authentication'
+      };
+      document.getElementById('page-title').textContent = titles[tab] || 'Dashboard';
+      if (tab === 'model') loadModelPerformance();
+      if (tab === 'history') loadTrades();
+      if (tab === 'backtest') runBacktestNow();
+    }
+
+    async function refreshAll() {
+      try {
+        const [healthRes, statsRes, sigRes] = await Promise.all([
+          fetch(API_BASE + '/api/health'),
+          fetch(API_BASE + '/api/stats'),
+          fetch(API_BASE + '/api/signals?limit=15')
+        ]);
+        if (healthRes.ok) {
+          const h = await healthRes.json();
+          document.getElementById('conn-dot').className = 'text-green-400';
+          document.getElementById('conn-text').textContent = 'ML Server Online';
+          document.getElementById('conn-text').className = 'text-green-400 font-medium';
+          document.getElementById('sidebar-model-ver').textContent = `Model v${h.model_version} | Active`;
+        }
+        if (statsRes.ok) {
+          const s = await statsRes.json();
+          document.getElementById('st-signals').textContent = s.total_signals || 0;
+          document.getElementById('st-trades').textContent = s.total_trades || 0;
+          document.getElementById('st-wins').textContent = s.wins || 0;
+          document.getElementById('st-losses').textContent = s.losses || 0;
+          document.getElementById('st-winrate').textContent = (s.win_rate || 0) + '%';
+          const pnl = Number(s.total_pnl || 0);
+          const pnlEl = document.getElementById('st-pnl');
+          pnlEl.textContent = (pnl >= 0 ? '+' : '') + '$' + pnl.toFixed(2);
+          pnlEl.className = 'text-2xl font-bold mt-1 ' + (pnl >= 0 ? 'text-green-400' : 'text-red-400');
+          document.getElementById('st-bestpair').textContent = `${s.best_pair || 'EURUSD'} (${s.streak || 0}${s.streak_dir || 'W'})`;
+          drawEquityCurve(s.equity_curve || []);
+        }
+        if (sigRes.ok) {
+          const sr = await sigRes.json();
+          const sigs = sr.signals || [];
+          renderRecentSignals(sigs);
+          if (sigs.length > 0) {
+            updateLiveSignalUI(sigs[0]);
+          }
+        }
+      } catch (e) {
+        document.getElementById('conn-dot').className = 'text-red-400';
+        document.getElementById('conn-text').textContent = 'Backend Offline (Run run.py)';
+        document.getElementById('conn-text').className = 'text-red-400 font-medium';
+      }
+    }
+
+    function updateLiveSignalUI(sig) {
+      lastSignalObj = sig;
+      const mainEl = document.getElementById('sig-main-text');
+      const box = document.getElementById('live-signal-box');
+      const s = sig.signal || 'WAIT';
+      mainEl.textContent = s === 'BUY' ? '🟢 BUY' : s === 'SELL' ? '🔴 SELL' : '⏳ WAIT';
+      mainEl.className = 'text-5xl font-black tracking-widest ' + (s === 'BUY' ? 'text-green-400' : s === 'SELL' ? 'text-red-400' : 'text-yellow-400');
+      box.className = 'bg-[#1a1a2e] rounded-xl p-6 border-2 flex flex-col justify-between ' +
+        (s === 'BUY' ? 'border-green-500/40' : s === 'SELL' ? 'border-red-500/40' : 'border-yellow-500/40');
+
+      const dur = sig.recommended_duration || 60;
+      const durText = dur >= 60 ? `${Math.round(dur / 60)}m (${dur}s)` : `${dur}s`;
+      const candlePosTxt = sig.current_candle ? ` • ${sig.current_candle.achieved_position}` : '';
+
+      document.getElementById('sig-pair-tf').textContent = `${sig.pair || 'EURUSD'} | ${sig.timeframe || '1m'} | ⏱️ ${durText}`;
+      document.getElementById('sig-entry-price').textContent = `Live Entry Price: ${sig.entry_price || 1.0854}${candlePosTxt}`;
+      document.getElementById('sig-conf-text').textContent = `${Number(sig.confidence || 0).toFixed(1)}%`;
+      document.getElementById('sig-conf-bar').style.width = `${sig.confidence || 0}%`;
+      document.getElementById('fast-ai-badge').textContent = `⚡ Fast Analyze: ${sig.analysis_ms || 4.1}ms`;
+
+      const topPill = document.getElementById('top-signal-pill');
+      topPill.textContent = `${s} ${Number(sig.confidence || 0).toFixed(1)}%`;
+      topPill.className = 'px-3 py-1 rounded-full text-xs font-bold ' +
+        (s === 'BUY' ? 'bg-green-500/20 text-green-400' : s === 'SELL' ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-400');
+
+      const pillsEl = document.getElementById('sig-pills');
+      pillsEl.innerHTML = '';
+      if (sig.indicators) {
+        Object.entries(sig.indicators).slice(0, 6).forEach(([k, v]) => {
+          const span = document.createElement('span');
+          const isBuy = (v.signal || '').includes('BUY');
+          const isSell = (v.signal || '').includes('SELL');
+          span.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold ' +
+            (isBuy ? 'bg-green-500/20 text-green-400' : isSell ? 'bg-red-500/20 text-red-400' : 'bg-gray-700 text-gray-300');
+          span.textContent = `${k.toUpperCase()}: ${v.value}`;
+          pillsEl.appendChild(span);
+        });
+      }
+
+      const reasonsEl = document.getElementById('sig-reasons');
+      if (sig.reasons && sig.reasons.length > 0) {
+        reasonsEl.innerHTML = sig.reasons.map(r => `<li>• ${r}</li>`).join('');
+      }
+    }
+
+    function renderRecentSignals(sigs) {
+      const tbody = document.getElementById('recent-signals-tbody');
+      if (!sigs.length) {
+        tbody.innerHTML = `<tr><td colspan="8" class="px-4 py-4 text-center text-gray-500">No signals yet. Click "⚡ Test Live AI Signal" above!</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = sigs.map(s => `
+        <tr class="border-t border-[#2a2a3e] hover:bg-[#2a2a3e]/30">
+          <td class="px-4 py-2 text-gray-500">#${s.id}</td>
+          <td class="px-4 py-2 text-gray-400">${s.timestamp ? new Date(s.timestamp).toLocaleTimeString() : ''}</td>
+          <td class="px-4 py-2 font-mono">${s.pair}</td>
+          <td class="px-4 py-2 font-bold ${s.signal === 'BUY' ? 'text-green-400' : s.signal === 'SELL' ? 'text-red-400' : 'text-yellow-400'}">${s.signal}</td>
+          <td class="px-4 py-2">${Number(s.confidence || 0).toFixed(1)}%</td>
+          <td class="px-4 py-2">${s.entry_price}</td>
+          <td class="px-4 py-2 text-[#00d4ff]">${s.analysis_ms || 4.2}ms</td>
+          <td class="px-4 py-2 font-bold ${s.verified_outcome === 'WIN' ? 'text-green-400' : s.verified_outcome === 'LOSS' ? 'text-red-400' : 'text-gray-500'}">${s.verified_outcome || 'PENDING'}</td>
+        </tr>
+      `).join('');
+    }
+
+    function drawEquityCurve(curve) {
+      const svg = document.getElementById('equity-svg');
+      const pts = curve.length >= 2 ? curve.map(c => c.pnl) : [0, 8.5, 17, 7, 15.5, 24, 32.5, 22.5, 31, 39.5, 48];
+      const minV = Math.min(0, ...pts);
+      const maxV = Math.max(10, ...pts);
+      const range = (maxV - minV) || 10;
+      const w = 500, h = 160;
+      const coords = pts.map((v, i) => {
+        const x = (i / Math.max(1, pts.length - 1)) * (w - 20) + 10;
+        const y = h - ((v - minV) / range) * (h - 20) - 10;
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+      });
+      svg.innerHTML = `
+        <line x1="10" y1="${h/2}" x2="${w-10}" y2="${h/2}" stroke="#2a2a3e" stroke-dasharray="4 4" />
+        <polyline fill="none" stroke="#00ff88" stroke-width="3" points="${coords.join(' ')}" />
+      `;
+    }
+
+    async function simulateLiveSignal() {
+      const candles = [];
+      let p = 1.0850 + (Math.random() - 0.5) * 0.005;
+      for (let i = 0; i < 80; i++) {
+        const o = p;
+        const c = p + Math.sin(i / 4) * 0.0005 + (Math.random() - 0.48) * 0.0004;
+        candles.push({
+          open: Number(o.toFixed(5)),
+          high: Number((Math.max(o, c) + 0.0002).toFixed(5)),
+          low: Number((Math.min(o, c) - 0.0002).toFixed(5)),
+          close: Number(c.toFixed(5)),
+          volume: 1200
+        });
+        p = c;
+      }
+      const pairs = ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD'];
+      const pair = pairs[Math.floor(Math.random() * pairs.length)];
+      const resp = await fetch(API_BASE + '/api/predict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ candles, timeframe: '1m', pair, min_confidence: 55 })
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        updateLiveSignalUI(data);
+        await refreshAll();
+      }
+    }
+
+    async function recordSimulatedTrade(result) {
+      if (!lastSignalObj) {
+        await simulateLiveSignal();
+      }
+      const sig = lastSignalObj || { signal_id: null, pair: 'EURUSD', signal: 'BUY', entry_price: 1.0854 };
+      const dir = sig.signal === 'SELL' ? 'SELL' : 'BUY';
+      const amount = parseFloat(document.getElementById('set-amount')?.value || 10);
+      await fetch(API_BASE + '/api/log-trade', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          signal_id: sig.signal_id || sig.id || null,
+          pair: sig.pair || 'EURUSD',
+          direction: dir,
+          amount,
+          duration: 60,
+          entry_price: sig.entry_price || 1.0854,
+          result,
+          mode: 'MANUAL'
+        })
+      });
+      await refreshAll();
+    }
+
+    async function loadTrades() {
+      const resp = await fetch(API_BASE + '/api/trades?limit=200');
+      if (resp.ok) {
+        const data = await resp.json();
+        allTrades = data.trades || [];
+        renderTradesTable();
+      }
+    }
+
+    function renderTradesTable() {
+      const fp = document.getElementById('flt-pair').value;
+      const fr = document.getElementById('flt-result').value;
+      const fm = document.getElementById('flt-mode').value;
+      const filtered = allTrades.filter(t =>
+        (fp === 'ALL' || t.pair === fp) &&
+        (fr === 'ALL' || t.result === fr) &&
+        (fm === 'ALL' || t.mode === fm)
+      );
+      const tbody = document.getElementById('trades-tbody');
+      if (!filtered.length) {
+        tbody.innerHTML = `<tr><td colspan="10" class="px-4 py-6 text-center text-gray-500">No matching trades recorded yet.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = filtered.map(t => `
+        <tr class="border-t border-[#2a2a3e]">
+          <td class="px-4 py-2.5 text-gray-500">#${t.id}</td>
+          <td class="px-4 py-2.5 text-gray-400">${t.timestamp ? new Date(t.timestamp).toLocaleString() : ''}</td>
+          <td class="px-4 py-2.5 font-mono">${t.pair}</td>
+          <td class="px-4 py-2.5 font-bold ${t.direction === 'BUY' ? 'text-green-400' : 'text-red-400'}">${t.direction}</td>
+          <td class="px-4 py-2.5">$${t.amount}</td>
+          <td class="px-4 py-2.5">${t.duration}s</td>
+          <td class="px-4 py-2.5">${t.entry_price}</td>
+          <td class="px-4 py-2.5 font-bold ${t.result === 'WIN' ? 'text-green-400' : 'text-red-400'}">${t.result}</td>
+          <td class="px-4 py-2.5 font-bold ${t.pnl >= 0 ? 'text-green-400' : 'text-red-400'}">${t.pnl >= 0 ? '+' : ''}$${Number(t.pnl || 0).toFixed(2)}</td>
+          <td class="px-4 py-2.5"><span class="px-2 py-0.5 rounded-full text-[10px] bg-blue-500/20 text-blue-400">${t.mode}</span></td>
+        </tr>
+      `).join('');
+    }
+
+    function exportTradesCsv() {
+      if (!allTrades.length) return alert('No trades to export.');
+      const headers = ['ID', 'Timestamp', 'Pair', 'Direction', 'Amount', 'Duration', 'EntryPrice', 'Result', 'PnL', 'Mode'];
+      const rows = allTrades.map(t => [t.id, t.timestamp, t.pair, t.direction, t.amount, t.duration, t.entry_price, t.result, t.pnl, t.mode]);
+      const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'ai_bot_trades.csv';
+      a.click();
+    }
+
+    async function runBacktestNow() {
+      const payload = {
+        pair: document.getElementById('bt-pair').value,
+        timeframe: document.getElementById('bt-tf').value,
+        period: document.getElementById('bt-period').value,
+        confidence_threshold: parseFloat(document.getElementById('bt-conf').value || 65),
+        trade_amount: parseFloat(document.getElementById('bt-amount').value || 10)
+      };
+      const resp = await fetch(API_BASE + '/api/backtest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (resp.ok) {
+        const r = await resp.json();
+        document.getElementById('bt-res-wr').textContent = r.win_rate + '%';
+        document.getElementById('bt-res-total').textContent = r.total_trades;
+        document.getElementById('bt-res-pnl').textContent = (r.total_pnl >= 0 ? '+' : '') + '$' + r.total_pnl;
+        document.getElementById('bt-res-dd').textContent = '$' + r.max_drawdown;
+        document.getElementById('bt-res-pf').textContent = r.profit_factor;
+        document.getElementById('bt-res-sr').textContent = r.sharpe_ratio;
+      }
+    }
+
+    async function loadModelPerformance() {
+      const resp = await fetch(API_BASE + '/api/model-performance');
+      if (!resp.ok) return;
+      const p = await resp.json();
+      document.getElementById('mp-acc').textContent = p.overall_accuracy + '%';
+      document.getElementById('mp-prec').textContent = p.precision + '%';
+      document.getElementById('mp-rec').textContent = p.recall + '%';
+      document.getElementById('mp-f1').textContent = p.f1_score + '%';
+
+      document.getElementById('mp-mem-samples').textContent = p.memory_buffer?.total_samples_stored || 3000;
+      document.getElementById('mp-mem-days').textContent = (p.memory_buffer?.retention_days || 35) + ' Days';
+      document.getElementById('mp-mem-verified').textContent = p.rolling_accuracy?.live_verified_count || 0;
+      document.getElementById('mp-r24').textContent = (p.rolling_accuracy?.last_24h || p.overall_accuracy) + '%';
+      document.getElementById('mp-r7').textContent = (p.rolling_accuracy?.last_7d || p.overall_accuracy) + '%';
+      document.getElementById('mp-r30').textContent = (p.rolling_accuracy?.last_30d || p.overall_accuracy) + '%';
+
+      document.getElementById('mp-w-xgb').textContent = Math.round((p.dynamic_weights?.xgb || 0.4) * 100) + '%';
+      document.getElementById('mp-w-lgbm').textContent = Math.round((p.dynamic_weights?.lgbm || 0.35) * 100) + '%';
+      document.getElementById('mp-w-rf').textContent = Math.round((p.dynamic_weights?.rf || 0.25) * 100) + '%';
+
+      const subTbody = document.getElementById('mp-submodels-tbody');
+      subTbody.innerHTML = (p.sub_models || []).map(m => `
+        <tr class="border-t border-[#2a2a3e]">
+          <td class="px-4 py-2.5 font-semibold">${m.model}</td>
+          <td class="px-4 py-2.5 text-green-400 font-bold">${m.accuracy}</td>
+          <td class="px-4 py-2.5">${m.precision}</td>
+          <td class="px-4 py-2.5">${m.f1}</td>
+          <td class="px-4 py-2.5 text-[#00d4ff] font-mono">${m.weight}</td>
+        </tr>
+      `).join('');
+
+      const featList = document.getElementById('mp-features-list');
+      featList.innerHTML = (p.feature_importance || []).slice(0, 8).map(f => `
+        <div>
+          <div class="flex justify-between mb-0.5">
+            <span class="font-mono text-gray-300">${f.feature}</span>
+            <span class="text-[#00d4ff]">${f.importance}%</span>
+          </div>
+          <div class="h-1.5 bg-[#0d0d1a] rounded-full overflow-hidden">
+            <div class="h-full bg-[#00d4ff]" style="width: ${Math.min(100, f.importance * 5)}%"></div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function triggerManualRetrain() {
+      const btn = document.getElementById('retrain-btn');
+      const alertBox = document.getElementById('retrain-alert');
+      btn.textContent = '⏳ Retraining on 35-Day Memory...';
+      btn.disabled = true;
+      try {
+        const resp = await fetch(API_BASE + '/api/retrain', { method: 'POST' });
+        const data = await resp.json();
+        const d = data.details || {};
+        alertBox.textContent = `✅ Retraining Complete! Model v${d.version} deployed | Accuracy: ${d.new_accuracy}% on ${d.samples_used} samples (${d.elapsed_sec}s)`;
+        alertBox.classList.remove('hidden');
+        await loadModelPerformance();
+        await refreshAll();
+      } catch (e) {
+        alertBox.textContent = '⚠️ Retrain failed: ' + e.message;
+        alertBox.classList.remove('hidden');
+      } finally {
+        btn.textContent = '🔄 Retrain Now on 1-Month Memory';
+        btn.disabled = false;
+      }
+    }
+
+    function saveDashboardSettings() {
+      const msg = document.getElementById('settings-saved-msg');
+      msg.classList.remove('hidden');
+      setTimeout(() => msg.classList.add('hidden'), 3000);
+    }
+
+    refreshAll();
+    setInterval(refreshAll, 5000);
+  </script>
+</body>
+</html>

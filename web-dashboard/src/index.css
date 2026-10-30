@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-bg: #0d0d1a;
+  --color-surface: #1a1a2e;
+  --color-border: #2a2a3e;
+  --color-buy: #00ff88;
+  --color-sell: #ff1744;
+  --color-wait: #ffc107;
+  --color-accent: #00d4ff;
+}
+
+body {
+  background: var(--color-bg);
+  color: #e0e0e0;
+  font-family: 'Segoe UI', Tahoma, sans-serif;
+  margin: 0;
+}
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--color-bg); }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }

@@ -1,0 +1,50 @@
+# Python & Virtual Environments
+venv/
+env/
+.venv/
+*/venv/
+*/env/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*/__pycache__/
+
+# Testing & Coverage
+.pytest_cache/
+*/.pytest_cache/
+.coverage
+htmlcov/
+
+# CatBoost temporary training logs
+catboost_info/
+*/catboost_info/
+
+# SQLite databases & runtime states
+*.db
+*.sqlite
+*.sqlite3
+trading_bot.db
+*/trading_bot.db
+
+# Environment variables & secrets
+.env
+.env.local
+*.env
+!.env.example
+
+# Node & Frontend dependencies
+node_modules/
+npm-debug.log*
+dist/
+build/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDEs
+.vscode/
+.idea/

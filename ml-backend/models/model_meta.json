@@ -1,0 +1,141 @@
+{
+  "version": "1.0.55",
+  "trained_at": "2026-10-30T15:06:03.045419Z",
+  "features": [
+    "rsi_14",
+    "rsi_7",
+    "stoch_k",
+    "stoch_d",
+    "williams_r",
+    "cci",
+    "ema_9",
+    "ema_21",
+    "sma_50",
+    "macd_line",
+    "macd_signal",
+    "macd_hist",
+    "ema_cross",
+    "adx",
+    "bb_width",
+    "bb_position",
+    "atr_14",
+    "price_change_1",
+    "price_change_3",
+    "price_change_5",
+    "candle_body_ratio",
+    "body_size",
+    "upper_wick",
+    "lower_wick",
+    "is_doji",
+    "is_hammer",
+    "is_engulfing",
+    "consecutive_same_direction"
+  ],
+  "n_samples": 10730,
+  "train_size": 8584,
+  "test_size": 2146,
+  "accuracy": 0.5336,
+  "precision": 0.6005,
+  "recall": 0.5797,
+  "f1_score": 0.5899,
+  "confusion_matrix": [
+    [
+      425,
+      479
+    ],
+    [
+      522,
+      720
+    ]
+  ],
+  "sub_models": [
+    {
+      "model": "XGBoost",
+      "accuracy": "53.6%",
+      "precision": "60.5%",
+      "recall": "57.1%",
+      "f1": "58.8%",
+      "weight": "20%",
+      "status": "Active"
+    },
+    {
+      "model": "LightGBM",
+      "accuracy": "52.3%",
+      "precision": "59.4%",
+      "recall": "55.6%",
+      "f1": "57.4%",
+      "weight": "31%",
+      "status": "Active"
+    },
+    {
+      "model": "CatBoost",
+      "accuracy": "52.9%",
+      "precision": "60.1%",
+      "recall": "55.6%",
+      "f1": "57.7%",
+      "weight": "31%",
+      "status": "Active"
+    },
+    {
+      "model": "Random Forest",
+      "accuracy": "51.8%",
+      "precision": "59.5%",
+      "recall": "52.3%",
+      "f1": "55.7%",
+      "weight": "17%",
+      "status": "Active"
+    }
+  ],
+  "feature_importance": [
+    {
+      "feature": "rsi_14",
+      "importance": 10.44
+    },
+    {
+      "feature": "rsi_7",
+      "importance": 6.73
+    },
+    {
+      "feature": "atr_14",
+      "importance": 5.97
+    },
+    {
+      "feature": "bb_width",
+      "importance": 5.64
+    },
+    {
+      "feature": "cci",
+      "importance": 5.41
+    },
+    {
+      "feature": "macd_signal",
+      "importance": 5.2
+    },
+    {
+      "feature": "stoch_d",
+      "importance": 4.92
+    },
+    {
+      "feature": "stoch_k",
+      "importance": 4.81
+    },
+    {
+      "feature": "bb_position",
+      "importance": 4.03
+    },
+    {
+      "feature": "upper_wick",
+      "importance": 3.82
+    },
+    {
+      "feature": "adx",
+      "importance": 3.58
+    },
+    {
+      "feature": "lower_wick",
+      "importance": 3.5
+    }
+  ],
+  "retention_days": 35,
+  "elapsed_sec": 6.36
+}
