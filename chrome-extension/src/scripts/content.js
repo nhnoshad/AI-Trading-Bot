@@ -138,6 +138,50 @@
     lastLearningNote: 'Continuous adaptive learning active'
   };
 
+  // ── Broker Server Clock & Timeframe Synchronization ───────────────────────
+  let brokerClockOffset = 0;
+  function getBrokerNow() {
+    return Date.now() + brokerClockOffset;
+  }
+
+  function getEffectiveTimeframeSeconds() {
+    const tf = (currentTimeframe || '1m').toLowerCase();
+    if (tf === '5s') return 5;
+    if (tf === '10s') return 10;
+    if (tf === '15s') return 15;
+    if (tf === '30s') return 30;
+    if (tf === '1m') return 60;
+    if (tf === '2m') return 120;
+    if (tf === '5m') return 300;
+    if (tf === '15m') return 900;
+    if (tf === '30m') return 1800;
+    if (tf === '1h') return 3600;
+    return (botSettings.tradeDuration || 60);
+  }
+
+  function getCandleTimeRemaining() {
+    const now = getBrokerNow();
+    const tfSec = getEffectiveTimeframeSeconds();
+    const tfMs = tfSec * 1000;
+    const bucket = Math.floor(now / tfMs) * tfMs;
+    const msIntoBar = ((now % tfMs) + tfMs) % tfMs;
+    const msLeft = tfMs - msIntoBar;
+    // Quotex candle timer counts down from 59 to 00 for a 60s bar:
+    const secondsLeft = Math.max(0, Math.floor(msLeft / 1000));
+    const mm = String(Math.floor(secondsLeft / 60)).padStart(2, '0');
+    const ss = String(secondsLeft % 60).padStart(2, '0');
+    return {
+      now,
+      bucket,
+      tfSec,
+      tfMs,
+      secondsLeft,
+      clockStr: `${mm}:${ss}`,
+      curMinStr: formatMinuteString(bucket),
+      nextMinStr: formatMinuteString(bucket + tfMs)
+    };
+  }
+
   function formatMinuteString(timestamp) {
     const d = new Date(timestamp);
     const h = String(d.getHours()).padStart(2, '0');
@@ -263,6 +307,10 @@
     const msg = event.data;
 
     if (msg.source === 'AI_BOT_WS_TICK') {
+      if (typeof msg.timestamp === 'number' && msg.timestamp > 1e9) {
+        const brokerTs = msg.timestamp < 1e11 ? msg.timestamp * 1000 : msg.timestamp;
+        brokerClockOffset = Math.round(brokerTs - Date.now());
+      }
       const tickPair = normalizePairName(msg.asset || currentPair);
       recordLivePairPrice(tickPair, msg.price, msg.decimals);
       lastWsTick = {
@@ -1023,16 +1071,16 @@
     countdownTimer = setInterval(() => {
       if (teardownIfOrphaned() || !isRunning) return;
 
-      const now = Date.now();
-      const currentMinuteBucket = Math.floor(now / 60000) * 60000;
-      const secondsIntoMinute = Math.floor((now % 60000) / 1000);
-      const secondsLeftInCandle = 60 - secondsIntoMinute;
+      const tInfo = getCandleTimeRemaining();
+      const now = tInfo.now;
+      const currentMinuteBucket = tInfo.bucket;
+      const secondsLeftInCandle = tInfo.secondsLeft;
+      const currentMinStr = tInfo.curMinStr;
+      const nextMinBucket = tInfo.bucket + tInfo.tfMs;
+      const nextMinStr = tInfo.nextMinStr;
+      const clockCountdownStr = tInfo.clockStr;
 
-      const currentMinStr = formatMinuteString(currentMinuteBucket);
-      const nextMinBucket = currentMinuteBucket + 60000;
-      const nextMinStr = formatMinuteString(nextMinBucket);
-
-      // Check if minute boundary crossed -> a candle has completed!
+      // Check if minute/bar boundary crossed -> a candle has completed!
       if (currentMinuteBucket > lastCompletedMinuteBucket) {
         const justCompletedBucket = lastCompletedMinuteBucket;
         lastCompletedMinuteBucket = currentMinuteBucket;
@@ -1100,8 +1148,8 @@
       }
 
       // Update locked overlay display and sync state to popup
-      updateLockedOverlayDisplay(currentMinuteBucket, currentMinStr, nextMinStr, secondsLeftInCandle);
-      broadcastCandleState(currentMinuteBucket, currentMinStr, nextMinStr, secondsLeftInCandle);
+      updateLockedOverlayDisplay(currentMinuteBucket, currentMinStr, nextMinStr, secondsLeftInCandle, clockCountdownStr);
+      broadcastCandleState(currentMinuteBucket, currentMinStr, nextMinStr, secondsLeftInCandle, clockCountdownStr);
     }, 1000);
   }
 
@@ -1329,14 +1377,15 @@
     });
   }
 
-  function broadcastCandleState(bucket, curMinStr, nextMinStr, secondsLeft) {
+  function broadcastCandleState(bucket, curMinStr, nextMinStr, secondsLeft, clockCountdownStr) {
     if (teardownIfOrphaned()) return;
 
-    const now = Date.now();
-    const currentMinuteBucket = bucket || Math.floor(now / 60000) * 60000;
-    const curStr = curMinStr || formatMinuteString(currentMinuteBucket);
-    const nxtStr = nextMinStr || formatMinuteString(currentMinuteBucket + 60000);
-    const secs = Number.isFinite(secondsLeft) ? secondsLeft : (60 - (Math.floor(now / 1000) % 60));
+    const tInfo = getCandleTimeRemaining();
+    const currentMinuteBucket = bucket || tInfo.bucket;
+    const curStr = curMinStr || tInfo.curMinStr;
+    const nxtStr = nextMinStr || tInfo.nextMinStr;
+    const secs = Number.isFinite(secondsLeft) ? secondsLeft : tInfo.secondsLeft;
+    const clockStr = clockCountdownStr || tInfo.clockStr;
 
     const isCandleActive = Boolean(activeCandlePrediction && activeCandlePrediction.candleStartBucket === currentMinuteBucket);
     const pred = isCandleActive ? activeCandlePrediction : (pendingNextCandlePrediction || lastSignal);
@@ -1348,6 +1397,7 @@
       nextCandleMinute: nxtStr,
       currentMinuteStr: curStr,
       secondsLeftInCandle: secs,
+      clockCountdownStr: clockStr,
       direction: pred ? (pred.direction || pred.signal || 'WAIT') : 'WAIT',
       signal: pred ? (pred.signal || pred.direction || 'WAIT') : 'WAIT',
       confidence: pred ? (pred.confidence || 0) : 0,
@@ -1366,15 +1416,16 @@
     safeStorageSet({ currentCandleState: payload });
   }
 
-  function updateLockedOverlayDisplay(bucket, curMinStr, nextMinStr, secondsLeft) {
+  function updateLockedOverlayDisplay(bucket, curMinStr, nextMinStr, secondsLeft, clockCountdownStr) {
     if (!overlayElement || !overlayElement.isConnected) createOverlay();
     if (!overlayElement) return;
 
-    const now = Date.now();
-    const currentMinuteBucket = bucket || Math.floor(now / 60000) * 60000;
-    const curStr = curMinStr || formatMinuteString(currentMinuteBucket);
-    const nxtStr = nextMinStr || formatMinuteString(currentMinuteBucket + 60000);
-    const secs = Number.isFinite(secondsLeft) ? secondsLeft : (60 - (Math.floor(now / 1000) % 60));
+    const tInfo = getCandleTimeRemaining();
+    const currentMinuteBucket = bucket || tInfo.bucket;
+    const curStr = curMinStr || tInfo.curMinStr;
+    const nxtStr = nextMinStr || tInfo.nextMinStr;
+    const secs = Number.isFinite(secondsLeft) ? secondsLeft : tInfo.secondsLeft;
+    const clockStr = clockCountdownStr || tInfo.clockStr;
 
     const sectionLabelEl = overlayElement.querySelector('#ov-section-label');
     const signalEl = overlayElement.querySelector('#ov-signal');
@@ -1439,7 +1490,7 @@
       }
 
       if (expiryEl) {
-        expiryEl.innerHTML = `⏱️ DURATION: <b>${secs}s left</b> (Candle ${activeCandlePrediction.candleMinuteStr} Active • Locked)`;
+        expiryEl.innerHTML = `⏱️ DURATION: 1m (<b>${clockStr}</b> left • Candle ${activeCandlePrediction.candleMinuteStr} Active • Locked)`;
         expiryEl.style.background = 'rgba(0, 255, 136, 0.16)';
         expiryEl.style.borderColor = 'rgba(0, 255, 136, 0.45)';
         expiryEl.style.color = '#00ff88';
@@ -1470,7 +1521,7 @@
       signalEl.className = 'ov-signal ' + sig.toLowerCase();
 
       if (fabSigEl) {
-        fabSigEl.textContent = upcoming ? `${labelText} (${secs}s)` : 'AI BOT';
+        fabSigEl.textContent = upcoming ? `${labelText} (${clockStr})` : 'AI BOT';
       }
 
       if (predEl) {
@@ -1483,7 +1534,7 @@
       }
 
       if (expiryEl) {
-        expiryEl.innerHTML = `⏱️ DURATION: 1 MINUTE (Starts in <b>${secs}s</b> at ${nxtStr}:00)`;
+        expiryEl.innerHTML = `⏱️ DURATION: 1m (Starts in <b>${clockStr}</b> at ${nxtStr}:00)`;
         expiryEl.style.background = 'rgba(0, 212, 255, 0.12)';
         expiryEl.style.borderColor = 'rgba(0, 212, 255, 0.3)';
         expiryEl.style.color = '#00d4ff';
@@ -1505,19 +1556,24 @@
     // Present candle countdown & position
     if (candleTimerEl) {
       if (secs <= 5) {
-        candleTimerEl.textContent = `🚨 ${secs}s — CLOSING!`;
+        candleTimerEl.textContent = `🚨 ${clockStr} — CLOSING!`;
         candleTimerEl.style.color = '#ff1744';
       } else {
-        candleTimerEl.textContent = `⏳ ${secs}s left`;
+        candleTimerEl.textContent = `⏳ ${clockStr} left`;
         candleTimerEl.style.color = '#ffc107';
       }
     }
     if (candleRemainingEl) {
       if (secs <= 5) {
-        candleRemainingEl.innerHTML = `<span style="color:#ff1744; font-weight:900;">🚨 Present candle closing in <b>${secs}s</b>! Next starts at ${nxtStr}:00</span>`;
+        candleRemainingEl.innerHTML = `<span style="color:#ff1744; font-weight:900;">🚨 Present candle closing in <b>${clockStr}</b>! Next starts at ${nxtStr}:00</span>`;
       } else {
-        candleRemainingEl.innerHTML = `<span style="color:#00d4ff;">⏳ Present candle: <b>${secs}s</b> remaining until ${nxtStr}</span>`;
+        candleRemainingEl.innerHTML = `<span style="color:#00d4ff;">⏳ Present candle: <b>${clockStr}</b> remaining until ${nxtStr}</span>`;
       }
+    }
+
+    const ovCountdownEl = overlayElement.querySelector('#ov-countdown');
+    if (ovCountdownEl) {
+      ovCountdownEl.textContent = `Bar: ${clockStr} | TF: ${currentTimeframe || '1m'}`;
     }
 
     // Pair & Price

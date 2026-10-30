@@ -67,7 +67,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     const now = Date.now();
     const currentMinuteBucket = Math.floor(now / 60000) * 60000;
     const secondsIntoMinute = Math.floor((now % 60000) / 1000);
-    const secondsLeft = 60 - secondsIntoMinute;
+    // Quotex counts down from 59 to 00 for a 1-minute candle:
+    const secondsLeft = Math.max(0, 59 - secondsIntoMinute);
+    const mm = String(Math.floor(secondsLeft / 60)).padStart(2, '0');
+    const ss = String(secondsLeft % 60).padStart(2, '0');
+    const clockStr = `${mm}:${ss}`;
     const currentMinStr = formatMinuteString(currentMinuteBucket);
     const nextMinStr = formatMinuteString(currentMinuteBucket + 60000);
 
@@ -90,7 +94,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         labelEl.style.color = '#00ff88';
       }
       if (expEl) {
-        expEl.innerHTML = `⏱️ Duration: <b>${secondsLeft}s left</b> (Candle ${currentCandleState.activeCandleMinute} Active • Locked)`;
+        expEl.innerHTML = `⏱️ Duration: 1m (<b>${clockStr}</b> left • Candle ${currentCandleState.activeCandleMinute} Active)`;
         expEl.style.background = 'rgba(0, 255, 136, 0.16)';
         expEl.style.borderColor = 'rgba(0, 255, 136, 0.45)';
         expEl.style.color = '#00ff88';
@@ -102,7 +106,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         labelEl.style.color = '#00d4ff';
       }
       if (expEl) {
-        expEl.innerHTML = `⏱️ Duration: 1m (Starts in <b>${secondsLeft}s</b> at ${nextMinStr}:00)`;
+        expEl.innerHTML = `⏱️ Duration: 1m (Starts in <b>${clockStr}</b> at ${nextMinStr}:00)`;
         expEl.style.background = 'rgba(0, 212, 255, 0.12)';
         expEl.style.borderColor = 'rgba(0, 212, 255, 0.3)';
         expEl.style.color = '#00d4ff';
@@ -111,9 +115,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (cPosEl) {
       if (secondsLeft <= 5) {
-        cPosEl.innerHTML = `<span style="color:#ff1744; font-weight:700;">🚨 Present candle closing in <b>${secondsLeft}s</b>! Next starts at ${nextMinStr}:00</span>`;
+        cPosEl.innerHTML = `<span style="color:#ff1744; font-weight:700;">🚨 Present candle closing in <b>${clockStr}</b>! Next starts at ${nextMinStr}:00</span>`;
       } else {
-        cPosEl.innerHTML = `<span>⏳ Present candle: <b>${secondsLeft}s</b> left until ${nextMinStr}</span>`;
+        cPosEl.innerHTML = `<span>⏳ Present candle: <b>${clockStr}</b> remaining until ${nextMinStr}</span>`;
       }
     }
   }, 1000);
@@ -451,7 +455,10 @@ function renderCandlePredictionState(state) {
   const currentMinuteBucket = Math.floor(now / 60000) * 60000;
   const secondsLeft = Number.isFinite(state.secondsLeftInCandle)
     ? state.secondsLeftInCandle
-    : (60 - (Math.floor(now / 1000) % 60));
+    : Math.max(0, 59 - (Math.floor(now / 1000) % 60));
+  const mm = String(Math.floor(secondsLeft / 60)).padStart(2, '0');
+  const ss = String(secondsLeft % 60).padStart(2, '0');
+  const clockStr = state.clockCountdownStr || `${mm}:${ss}`;
   const curMinStr = state.currentMinuteStr || formatMinuteString(currentMinuteBucket);
   const nxtMinStr = state.nextCandleMinute || formatMinuteString(currentMinuteBucket + 60000);
 
@@ -485,7 +492,7 @@ function renderCandlePredictionState(state) {
       predActionEl.textContent = `Candle ${state.activeCandleMinute} running ${dirText} • LOCKED (Fixed)`;
     }
     if (expiryEl) {
-      expiryEl.innerHTML = `⏱️ Duration: <b>${secondsLeft}s left</b> (Candle ${state.activeCandleMinute} Active • Locked)`;
+      expiryEl.innerHTML = `⏱️ Duration: 1m (<b>${clockStr}</b> left • Candle ${state.activeCandleMinute} Active)`;
       expiryEl.style.background = 'rgba(0, 255, 136, 0.16)';
       expiryEl.style.borderColor = 'rgba(0, 255, 136, 0.45)';
       expiryEl.style.color = '#00ff88';
@@ -502,7 +509,7 @@ function renderCandlePredictionState(state) {
       else predActionEl.textContent = `Market consolidates — Wait for breakout ⏳`;
     }
     if (expiryEl) {
-      expiryEl.innerHTML = `⏱️ Duration: 1m (Starts in <b>${secondsLeft}s</b> at ${nxtMinStr}:00)`;
+      expiryEl.innerHTML = `⏱️ Duration: 1m (Starts in <b>${clockStr}</b> at ${nxtMinStr}:00)`;
       expiryEl.style.background = 'rgba(0, 212, 255, 0.12)';
       expiryEl.style.borderColor = 'rgba(0, 212, 255, 0.3)';
       expiryEl.style.color = '#00d4ff';
@@ -512,9 +519,9 @@ function renderCandlePredictionState(state) {
   // Current Candle Position countdown
   if (candlePosEl) {
     if (secondsLeft <= 5) {
-      candlePosEl.innerHTML = `<span style="color:#ff1744; font-weight:700;">🚨 Present candle closing in <b>${secondsLeft}s</b>! Next starts at ${nxtMinStr}:00</span>`;
+      candlePosEl.innerHTML = `<span style="color:#ff1744; font-weight:700;">🚨 Present candle closing in <b>${clockStr}</b>! Next starts at ${nxtMinStr}:00</span>`;
     } else {
-      candlePosEl.innerHTML = `<span>⏳ Present candle: <b>${secondsLeft}s</b> left until ${nxtMinStr}</span>`;
+      candlePosEl.innerHTML = `<span>⏳ Present candle: <b>${clockStr}</b> remaining until ${nxtMinStr}</span>`;
     }
   }
   if (candleStateEl) {
