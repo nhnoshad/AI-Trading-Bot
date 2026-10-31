@@ -190,6 +190,13 @@ async def log_trade(request: LogTradeRequest, db: Session = Depends(get_db)):
     Logs a completed trade (AUTO or MANUAL), updates daily stats, and feeds
     the WIN/LOSS outcome into the AdaptiveLearner so the AI learns from the result.
     """
+    # Do not log trades for WAIT predictions (no real trade is taken on WAIT)
+    if not request.direction or request.direction.upper() not in ('BUY', 'SELL'):
+        return {
+            'logged': False,
+            'reason': 'WAIT predictions are neutral market observations, not trades'
+        }
+
     calc_pnl = request.pnl
     if calc_pnl is None:
         if request.result == 'WIN':
@@ -266,6 +273,15 @@ async def record_candle_outcome(request: CandleOutcomeRequest, db: Session = Dep
             if signal_obj:
                 signal_obj.verified_outcome = request.result
                 db.commit()
+
+        # If direction is WAIT or result is not WIN/LOSS, do NOT record as a trade or loss!
+        if not request.direction or request.direction.upper() not in ('BUY', 'SELL') or request.result not in ('WIN', 'LOSS'):
+            return {
+                'success': True,
+                'recorded_trade': False,
+                'reason': 'WAIT / SKIP signals are not actual trades and are not scored as losses',
+                'weights': get_adaptive_learner().weights
+            }
 
         # 2. Record in Trade table under mode='PREDICTION' so stats and history reflect it
         pnl = 1.0 if request.result == 'WIN' else -1.0

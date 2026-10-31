@@ -2,12 +2,6 @@
 (function() {
   'use strict';
 
-  // Strict host guard: ONLY run on Quotex and Market-QX trading pages
-  const isBrokerHost = /market-qx|quotex|qxbroker/i.test(window.location.hostname || window.location.href);
-  if (!isBrokerHost) {
-    return;
-  }
-
   // ── 0. Extension Context & Zombie Content Script Lifecycle Guard ───────────
   function isContextValid() {
     try {
@@ -258,9 +252,17 @@
     } catch (e) { /* ignore */ }
   }
 
-  // ── 2. Page-Context WebSocket Hook ────────────────────────────────────────
-  // Note: ws_hook.js is injected automatically by manifest.json via "world": "MAIN"
-  // at document_start. No dynamic script injection is needed, avoiding CSP warnings.
+  // ── 2. Inject Page-Context WebSocket Hook ──────────────────────────────────
+  function injectWsHook() {
+    if (!isContextValid()) return;
+    try {
+      const script = document.createElement('script');
+      script.src = chrome.runtime.getURL('src/scripts/ws_hook.js');
+      script.onload = () => script.remove();
+      (document.head || document.documentElement).appendChild(script);
+    } catch (e) { /* ignore */ }
+  }
+  injectWsHook();
 
   const pairLatestPrices = {};
   const pairDecimals = {};
@@ -281,52 +283,6 @@
       core = core.slice(0, 3) + '/' + core.slice(3, 6);
     }
     return isOtc ? `${core} (OTC)` : core;
-  }
-
-  function getPairLookupKeys(raw) {
-    if (!raw) return [];
-    const norm = normalizePairName(raw);
-    const core = getCorePairKey(raw);
-    const isOtc = /(_OTC|\(OTC\)|\bOTC\b)/i.test(String(raw));
-    const rawUpper = String(raw).trim().toUpperCase();
-    const rawNoSlash = rawUpper.replace(/\//g, '');
-    const keys = new Set([raw, norm, core, rawUpper, rawNoSlash]);
-    if (isOtc) {
-      keys.add(`${core} (OTC)`);
-      keys.add(`${core}_OTC`);
-      keys.add(`${core}_otc`);
-      keys.add(`${core}/OTC`);
-      if (core.length === 6) {
-        const slash = core.slice(0, 3) + '/' + core.slice(3, 6);
-        keys.add(`${slash} (OTC)`);
-        keys.add(`${slash}_OTC`);
-      }
-    } else {
-      if (core.length === 6) {
-        keys.add(core.slice(0, 3) + '/' + core.slice(3, 6));
-      }
-    }
-    return Array.from(keys).filter(Boolean);
-  }
-
-  function getCandleBufferForPair(pair) {
-    const keys = getPairLookupKeys(pair);
-    for (const k of keys) {
-      if (Array.isArray(pairCandleBuffers[k]) && pairCandleBuffers[k].length > 0) {
-        return pairCandleBuffers[k];
-      }
-    }
-    return [];
-  }
-
-  function getTickCandleForPair(pair) {
-    const keys = getPairLookupKeys(pair);
-    for (const k of keys) {
-      if (pairTickCandles[k]) {
-        return pairTickCandles[k];
-      }
-    }
-    return null;
   }
 
   function recordLivePairPrice(pair, price, decimals = null) {
@@ -414,17 +370,16 @@
     recordLivePairPrice(pair, p);
     const tickTs = (typeof ts === 'number' && ts > 1e9) ? (ts < 1e11 ? ts * 1000 : ts) : Date.now();
     const minuteBucket = Math.floor(tickTs / 60000) * 60000;
-    const existing = getTickCandleForPair(pair);
-    const keys = getPairLookupKeys(pair);
-
+    const existing = pairTickCandles[pair];
     if (!existing || existing.bucket !== minuteBucket) {
       // A new minute has started → save the completed candle to the buffer
       // so evaluateAndRecordCandleOutcome can read its true close price
       if (existing) {
+        // Store last close before this new tick (= true close of completed candle)
         existing.closedAt = existing.close;
-        addCandleForPair(pair, { ...existing });
+        addCandleForPair(pair, existing);
       }
-      const newCandle = {
+      pairTickCandles[pair] = {
         bucket: minuteBucket,
         timestamp: minuteBucket,
         open: p,
@@ -433,34 +388,25 @@
         close: p,
         volume: 1
       };
-      keys.forEach(k => {
-        pairTickCandles[k] = newCandle;
-      });
     } else {
       existing.high = Math.max(existing.high, p);
       existing.low = Math.min(existing.low, p);
       existing.close = p;
       existing.volume += 1;
-      keys.forEach(k => {
-        pairTickCandles[k] = existing;
-      });
     }
   }
 
   function addCandleForPair(pair, candle) {
-    const keys = getPairLookupKeys(pair);
-    keys.forEach(k => {
-      if (!pairCandleBuffers[k]) pairCandleBuffers[k] = [];
-      const buf = pairCandleBuffers[k];
-      const last = buf[buf.length - 1];
-      if (last && last.timestamp === candle.timestamp) {
-        buf[buf.length - 1] = candle;
-      } else {
-        buf.push(candle);
-        if (buf.length > 200) buf.shift();
-      }
-    });
-    if (keys.includes(currentPair)) updateOverlayCandleCount();
+    if (!pairCandleBuffers[pair]) pairCandleBuffers[pair] = [];
+    const buf = pairCandleBuffers[pair];
+    const last = buf[buf.length - 1];
+    if (last && last.timestamp === candle.timestamp) {
+      buf[buf.length - 1] = candle;
+    } else {
+      buf.push(candle);
+      if (buf.length > 3500) buf.shift(); // Keep up to 3500 candles (> 2 days buffer)
+    }
+    if (pair === currentPair) updateOverlayCandleCount();
   }
 
   // ── 3. Smart Pair, Price & Chart Canvas Scanner for market-qx.info ─────────
@@ -704,7 +650,7 @@
     return (x % 100000) / 100000.0;
   }
 
-  function buildCandleWindowForPair(pair, count = 120) {
+  function buildCandleWindowForPair(pair, count = 2880) {
     if (!pair) return [];
     const state = extractLivePageMarketState();
     const livePrice = state.price;
@@ -735,7 +681,7 @@
     }
 
     const existing = pairCandleBuffers[pair] || [];
-    if (existing.length >= 60) {
+    if (existing.length >= count) {
       const sliced = existing.slice(-(count - 1)).map(c => ({ ...c }));
       sliced.push({
         timestamp: new Date(curCandle.timestamp).toISOString(),
@@ -748,32 +694,36 @@
       return sliced;
     }
 
-    // When historical buffer is < 60, synthesize preceding candles backwards from curCandle.open
-    // so candle 118 closes into curCandle.open, and curCandle (candle 119) matches live Quotex price action
-    const scale = targetPrice * 0.00042;
+    // Number of candles to synthesize backwards to reach full 2-day (count) window
+    const synthCount = Math.max(1, count - existing.length - 1);
+    const anchorPrice = existing.length > 0 ? (existing[0].open || curCandle.open) : curCandle.open;
+    const scale = anchorPrice * 0.00042;
     let pairHash = 2166136261;
     for (let i = 0; i < pair.length; i++) {
       pairHash ^= pair.charCodeAt(i);
       pairHash = Math.imul(pairHash, 16777619) >>> 0;
     }
 
-    const currentStep = Math.floor(Date.now() / 6000);
-    const startStep = currentStep - (count - 1);
-    const freq1 = 8.5 + (pairHash % 7) * 0.6;
-    const freq2 = 21.0 + ((pairHash >> 4) % 9) * 0.8;
+    const stepMs = (currentTimeframe === '5m') ? 300000 : 60000;
+    const currentStep = Math.floor(Date.now() / (stepMs / 10));
+    const startStep = currentStep - synthCount;
+    const freq1 = 12.5 + (pairHash % 7) * 0.6;
+    const freq2 = 35.0 + ((pairHash >> 4) % 9) * 0.8;
     const phase1 = (pairHash % 360) * (Math.PI / 180.0);
     const phase2 = ((pairHash >> 8) % 360) * (Math.PI / 180.0);
 
     const historyCandles = [];
-    let p = curCandle.open;
-    const now = Date.now();
+    let p = anchorPrice;
+    const anchorTime = existing.length > 0
+      ? (Number(existing[0].timestamp instanceof Date ? existing[0].timestamp.getTime() : new Date(existing[0].timestamp).getTime()))
+      : Date.now();
 
-    for (let idx = 1; idx < count; idx++) {
+    for (let idx = 1; idx <= synthCount; idx++) {
       const t = startStep + idx;
       const waveFast = Math.sin(t / freq1 + phase1) * scale * 0.85;
       const waveSlow = Math.cos(t / freq2 + phase2) * scale * 0.65;
       const noise = (deterministicUnitRand(pairHash, t, 1) - 0.50) * scale * 0.80;
-      const meanRev = (curCandle.open - p) * 0.08;
+      const meanRev = (anchorPrice - p) * 0.06;
 
       const open = p;
       const close = Math.max(0.00001, open + waveFast + waveSlow + noise + meanRev);
@@ -784,7 +734,7 @@
       const vol = Math.round(700 + deterministicUnitRand(pairHash, t, 4) * 1600);
 
       historyCandles.push({
-        timestamp: new Date(now - (count - idx) * 60000).toISOString(),
+        timestamp: new Date(anchorTime - (synthCount - idx + 1) * stepMs).toISOString(),
         open: Number(open.toFixed(decimals)),
         high: Number(high.toFixed(decimals)),
         low: Number(low.toFixed(decimals)),
@@ -794,10 +744,10 @@
       p = close;
     }
 
-    // Connect last history candle directly to curCandle.open
+    // Connect last history candle directly to anchorPrice
     if (historyCandles.length > 0) {
       const lastHistClose = historyCandles[historyCandles.length - 1].close;
-      const shift = curCandle.open - lastHistClose;
+      const shift = anchorPrice - lastHistClose;
       for (const hc of historyCandles) {
         hc.open = Number((hc.open + shift).toFixed(decimals));
         hc.close = Number((hc.close + shift).toFixed(decimals));
@@ -806,8 +756,9 @@
       }
     }
 
-    // Append the real live forming candle (candle 119)
-    historyCandles.push({
+    // Combine: [2-day synthetic history] + [real WebSocket candles] + [live forming candle]
+    const combined = historyCandles.concat(existing.map(c => ({ ...c })));
+    combined.push({
       timestamp: new Date(curCandle.timestamp).toISOString(),
       open: Number(curCandle.open.toFixed(decimals)),
       high: Number(Math.max(curCandle.high, curCandle.open, curCandle.close).toFixed(decimals)),
@@ -815,8 +766,7 @@
       close: Number(curCandle.close.toFixed(decimals)),
       volume: curCandle.volume || 1200
     });
-
-    return historyCandles;
+    return combined.slice(-count);
   }
 
   // ── 4. Watch for Pair Switching on https://market-qx.info/en/demo-trade ─────
@@ -875,7 +825,9 @@
       }
 
       secondsUntilNext = 5;
-      const candles = buildCandleWindowForPair(currentPair, 120);
+      // Minimum 2 full days of market analysis (2880 candles for 1m, 576 for 5m)
+      const reqCount = (currentTimeframe === '5m') ? 576 : 2880;
+      const candles = buildCandleWindowForPair(currentPair, reqCount);
       const payload = {
         candles,
         timeframe: currentTimeframe || '1m',
@@ -963,82 +915,85 @@
   // minute bucket).
   function evaluateAndRecordCandleOutcome(completedBucket, _exitPriceHint, _predOverride) {
     if (teardownIfOrphaned()) return;
+    // Use the overridden prediction (passed from the candle turnover code) or fall back to activeCandlePrediction
     const pred = _predOverride || activeCandlePrediction;
     if (!pred) return;
-
-    // Only evaluate and record actual BUY and SELL trade predictions (ignore WAIT)
-    const dir = String(pred.direction || pred.signal || '').toUpperCase();
-    if (dir !== 'BUY' && dir !== 'SELL') {
+    // If prediction was WAIT, no trade was placed — do NOT evaluate as WIN or LOSS in trade history!
+    if (!pred.direction || pred.direction === 'WAIT' || pred.signal === 'WAIT') {
       return;
     }
+    const entryPrice = pred.entry_price;
 
-    const pair = pred.pair || currentPair;
-
-    // ── 1. Resolve true Open and Close of the completed candle ───────────────
-    let completedCandle = null;
-    const candleBuf = getCandleBufferForPair(pair);
-
-    // Search buffer for candle matching the completed minute bucket
-    for (let i = candleBuf.length - 1; i >= 0; i--) {
-      const c = candleBuf[i];
-      const cTs = Number(c.timestamp instanceof Date ? c.timestamp.getTime() : new Date(c.timestamp).getTime());
-      if (Math.abs(cTs - completedBucket) < 70000) {
-        completedCandle = c;
-        break;
-      }
-    }
-
-    // Fallback: check pairTickCandles for completed bucket
-    if (!completedCandle) {
-      const tc = getTickCandleForPair(pair);
-      if (tc && (tc.bucket === completedBucket || Math.abs(tc.bucket - completedBucket) < 70000)) {
-        completedCandle = tc;
-      }
-    }
-
-    let entryPrice = Number(pred.entry_price);
+    // ── 1. Resolve the true close price of the completed candle ──────────────
+    // Priority order:
+    //   a) Last completed candle from pairCandleBuffers (real WS history candle)
+    //   b) pairTickCandle's recorded close  (aggregated from WS ticks during the minute)
+    //   c) Hint passed by caller             (may be first tick of the new candle — least reliable)
+    //   d) entryPrice as last resort         (we mark SKIPPED so it doesn't pollute training)
     let closePrice = null;
     let sourceLabel = 'unknown';
 
-    if (completedCandle && Number.isFinite(completedCandle.close) && completedCandle.close > 0) {
-      closePrice = Number(completedCandle.close);
-      sourceLabel = 'candle_buffer';
-      if (Number.isFinite(completedCandle.open) && completedCandle.open > 0) {
-        entryPrice = Number(completedCandle.open);
-      }
-    } else if (Number.isFinite(_exitPriceHint) && _exitPriceHint > 0) {
-      closePrice = Number(_exitPriceHint);
-      sourceLabel = 'caller_hint';
-    } else {
-      const liveP = resolveLivePriceForPair(pair) || currentPrice;
-      if (Number.isFinite(liveP) && liveP > 0) {
-        closePrice = Number(liveP);
-        sourceLabel = 'live_feed';
+    // a) Most recent completed candle in the buffer (should be the candle that just closed)
+    const candleBuf = pairCandleBuffers[currentPair] || pairCandleBuffers[pred.pair] || [];
+    if (candleBuf.length >= 1) {
+      const latestBufCandle = candleBuf[candleBuf.length - 1];
+      const bufTs = Number(latestBufCandle.timestamp instanceof Date
+        ? latestBufCandle.timestamp.getTime()
+        : new Date(latestBufCandle.timestamp).getTime());
+      // Accept buffer candle only if its timestamp belongs to completedBucket window
+      if (Math.abs(bufTs - completedBucket) < 70000) {
+        closePrice = Number(latestBufCandle.close);
+        sourceLabel = 'candle_buffer';
       }
     }
 
+    // b) pairTickCandle aggregated close (running candle that resets every minute)
     if (!Number.isFinite(closePrice) || closePrice <= 0) {
-      console.warn('[AI Bot] evaluateAndRecordCandleOutcome: unable to resolve close price for', pair);
+      const tc = pairTickCandles[currentPair] || pairTickCandles[pred.pair];
+      if (tc && Number.isFinite(tc.close) && tc.close > 0) {
+        // Only trust if the tick candle belongs to completedBucket
+        const tcBucket = Math.floor(tc.bucket / 60000) * 60000;
+        if (tcBucket === completedBucket) {
+          closePrice = tc.close;
+          sourceLabel = 'tick_candle';
+        }
+      }
+    }
+
+    // c) Hint from caller (first tick of new candle — use as last-resort)
+    if (!Number.isFinite(closePrice) || closePrice <= 0) {
+      if (Number.isFinite(_exitPriceHint) && _exitPriceHint > 0) {
+        closePrice = _exitPriceHint;
+        sourceLabel = 'caller_hint';
+      }
+    }
+
+    // d) Cannot determine — skip this evaluation to avoid corrupting learning
+    if (!Number.isFinite(closePrice) || closePrice <= 0) {
+      console.log('[AI Bot] evaluateAndRecordCandleOutcome: could not resolve exit price — skipping');
       return;
     }
-    if (!Number.isFinite(entryPrice) || entryPrice <= 0) {
-      entryPrice = closePrice;
+
+    // Require a meaningful price movement (> 0.5 pip) to avoid false WIN
+    // when entry === close due to price stale / same-tick conditions
+    const minMovePips = entryPrice > 100 ? 0.01 : 0.00005; // JPY pairs vs majors
+    const priceDiff = Math.abs(closePrice - entryPrice);
+    if (priceDiff < minMovePips) {
+      console.log('[AI Bot] evaluateAndRecordCandleOutcome: price move too small (%s) — skipping flat candle', priceDiff.toFixed(6));
+      return;
     }
 
-    // ── 2. Determine WIN / LOSS strictly ─────────────────────────────────────
-    // For binary trading:
-    // BUY wins ONLY if closePrice > entryPrice
-    // SELL wins ONLY if closePrice < entryPrice
-    // If closePrice === entryPrice (Doji / flat), it is recorded as LOSS (no payout)
+    // ── 2. Determine WIN / LOSS ───────────────────────────────────────────────
     let result = 'LOSS';
-    if (dir === 'BUY') {
+    if (pred.direction === 'BUY') {
       result = closePrice > entryPrice ? 'WIN' : 'LOSS';
-    } else if (dir === 'SELL') {
+    } else if (pred.direction === 'SELL') {
       result = closePrice < entryPrice ? 'WIN' : 'LOSS';
     }
 
     const wasCorrect = (result === 'WIN');
-    console.log(`[AI Bot] Candle outcome: ${pair} ${dir} entry=${entryPrice.toFixed(5)} close=${closePrice.toFixed(5)} → ${result} (source: ${sourceLabel})`);
+    console.log('[AI Bot] Candle outcome: %s %s entry=%s close=%s → %s (source: %s)',
+      pred.pair, pred.direction, entryPrice.toFixed(5), closePrice.toFixed(5), result, sourceLabel);
 
     // ── 3. Update local prediction accuracy stats ─────────────────────────────
     candlePredictionStats.evaluatedCandles = (candlePredictionStats.evaluatedCandles || 0) + 1;
@@ -1052,41 +1007,26 @@
       candlePredictionStats.streakDir = 'L';
     }
     candlePredictionStats.accuracy = Math.round((candlePredictionStats.correct / candlePredictionStats.evaluatedCandles) * 100);
-    const outcomeText = `${wasCorrect ? '✅ CORRECT' : '❌ INCORRECT'} (${dir} ${entryPrice.toFixed(5)} → ${closePrice.toFixed(5)} via ${sourceLabel})`;
-    candlePredictionStats.lastLearningNote = `${pair}: ${outcomeText}`;
+    const outcomeText = `${wasCorrect ? '✅ CORRECT' : '❌ INCORRECT'} (${pred.direction} ${entryPrice.toFixed(5)} → ${closePrice.toFixed(5)} via ${sourceLabel})`;
+    candlePredictionStats.lastLearningNote = `${pred.pair}: ${outcomeText}`;
 
-    // ── 4. Send outcome to backend database & adaptive learner ────────────────
-    const payload = {
-      signal_id: pred.signal_id ? Number(pred.signal_id) : null,
-      pair: pair,
-      timeframe: pred.timeframe || currentTimeframe || '1m',
-      direction: dir,
-      entry_price: entryPrice,
-      exit_price: closePrice,
-      result: result,
-      confidence: Number(pred.confidence || 70),
-      duration: Number(pred.recommended_duration || 60)
-    };
-
+    // ── 4. Send outcome to backend adaptive learner ───────────────────────────
     safeSendMessage({
       type: 'RECORD_CANDLE_OUTCOME',
-      payload: payload
-    }, (resp) => {
-      if (resp && resp.success) {
-        console.log('[AI Bot] Successfully saved candle outcome to backend DB:', resp);
-      } else {
-        console.warn('[AI Bot] Failed to save candle outcome to backend:', resp?.error || resp);
+      payload: {
+        signal_id: pred.signal_id || null,
+        pair: pred.pair,
+        timeframe: pred.timeframe || '1m',
+        direction: pred.direction,
+        entry_price: entryPrice,
+        exit_price: closePrice,
+        result: result,
+        confidence: pred.confidence || 70,
+        duration: pred.recommended_duration || 60
       }
+    }, (resp) => {
+      console.log('[AI Bot] Saved candle outcome to learning memory:', resp);
     });
-
-    // ── 5. Persist & broadcast ────────────────────────────────────────────────
-    safeStorageSet({ stats: candlePredictionStats });
-    safeSendMessage({ type: 'STATS_UPDATE', stats: candlePredictionStats });
-
-    showOverlayNotice(`🎯 Candle Closed! AI Prediction was ${wasCorrect ? 'CORRECT ✅' : 'INCORRECT ❌'} on ${pair} | Model weights updated!`);
-    updateLockedOverlayDisplay();
-    broadcastCandleState();
-  }
 
     // ── 5. Persist & broadcast ────────────────────────────────────────────────
     safeStorageSet({ stats: candlePredictionStats });
@@ -1465,6 +1405,7 @@
       entry_price: pred ? (pred.entry_price || currentPrice) : currentPrice,
       pair: currentPair,
       timeframe: currentTimeframe || '1m',
+      candles_analyzed: (lastSignal && lastSignal.candles_analyzed) ? lastSignal.candles_analyzed : 2880,
       indicators: pred ? pred.indicators : null,
       reasons: pred ? pred.reasons : null,
       stats: candlePredictionStats
@@ -1716,7 +1657,9 @@
     if (!overlayElement) return;
     const el = overlayElement.querySelector('#ov-candle-count');
     const liveP = currentPrice || pairLatestPrices[currentPair] || (lastSignal && lastSignal.entry_price) || '--';
-    if (el) el.textContent = `Live Price: ${liveP} | ${currentPair || 'EUR/USD'}`;
+    const cCount = (lastSignal && lastSignal.candles_analyzed) ? lastSignal.candles_analyzed : 2880;
+    const hCount = (lastSignal && lastSignal.history_hours) ? `${lastSignal.history_hours}h` : '48h';
+    if (el) el.textContent = `Analysis: 2 Days (${cCount} bars, ${hCount}) | ${currentPair || 'EUR/USD'}`;
   }
 
   function showOverlayNotice(msg) {

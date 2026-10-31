@@ -348,6 +348,8 @@ class TradingPredictor:
             'entry_price': entry_price,
             'pair': pair,
             'timeframe': timeframe,
+            'candles_analyzed': len(candles),
+            'history_hours': round((len(candles) * (300 if timeframe == '5m' else 60)) / 3600.0, 1),
             'analysis_ms': analysis_ms,
             'indicators': indicator_signals,
             'features': features_dict,

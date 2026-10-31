@@ -1,6 +1,6 @@
 {
-  "version": "1.0.55",
-  "trained_at": "2026-10-30T15:06:03.045419Z",
+  "version": "1.0.57",
+  "trained_at": "2026-10-30T19:11:09.930854Z",
   "features": [
     "rsi_14",
     "rsi_7",
@@ -31,111 +31,111 @@
     "is_engulfing",
     "consecutive_same_direction"
   ],
-  "n_samples": 10730,
-  "train_size": 8584,
-  "test_size": 2146,
-  "accuracy": 0.5336,
-  "precision": 0.6005,
-  "recall": 0.5797,
-  "f1_score": 0.5899,
+  "n_samples": 10784,
+  "train_size": 8627,
+  "test_size": 2157,
+  "accuracy": 0.5285,
+  "precision": 0.6015,
+  "recall": 0.5579,
+  "f1_score": 0.5789,
   "confusion_matrix": [
     [
-      425,
-      479
+      441,
+      463
     ],
     [
-      522,
-      720
+      554,
+      699
     ]
   ],
   "sub_models": [
     {
       "model": "XGBoost",
-      "accuracy": "53.6%",
-      "precision": "60.5%",
-      "recall": "57.1%",
-      "f1": "58.8%",
-      "weight": "20%",
+      "accuracy": "54.1%",
+      "precision": "61.1%",
+      "recall": "57.7%",
+      "f1": "59.4%",
+      "weight": "11%",
       "status": "Active"
     },
     {
       "model": "LightGBM",
-      "accuracy": "52.3%",
-      "precision": "59.4%",
-      "recall": "55.6%",
-      "f1": "57.4%",
-      "weight": "31%",
+      "accuracy": "52.7%",
+      "precision": "59.9%",
+      "recall": "56.1%",
+      "f1": "58.0%",
+      "weight": "8%",
       "status": "Active"
     },
     {
       "model": "CatBoost",
-      "accuracy": "52.9%",
-      "precision": "60.1%",
-      "recall": "55.6%",
-      "f1": "57.7%",
-      "weight": "31%",
+      "accuracy": "51.8%",
+      "precision": "59.3%",
+      "recall": "54.3%",
+      "f1": "56.7%",
+      "weight": "13%",
       "status": "Active"
     },
     {
       "model": "Random Forest",
-      "accuracy": "51.8%",
-      "precision": "59.5%",
-      "recall": "52.3%",
-      "f1": "55.7%",
-      "weight": "17%",
+      "accuracy": "51.5%",
+      "precision": "59.0%",
+      "recall": "54.0%",
+      "f1": "56.4%",
+      "weight": "66%",
       "status": "Active"
     }
   ],
   "feature_importance": [
     {
       "feature": "rsi_14",
-      "importance": 10.44
+      "importance": 10.28
     },
     {
       "feature": "rsi_7",
-      "importance": 6.73
+      "importance": 6.74
     },
     {
       "feature": "atr_14",
-      "importance": 5.97
+      "importance": 5.9
     },
     {
       "feature": "bb_width",
-      "importance": 5.64
-    },
-    {
-      "feature": "cci",
-      "importance": 5.41
+      "importance": 5.59
     },
     {
       "feature": "macd_signal",
-      "importance": 5.2
+      "importance": 5.38
+    },
+    {
+      "feature": "cci",
+      "importance": 5.34
     },
     {
       "feature": "stoch_d",
-      "importance": 4.92
+      "importance": 4.74
     },
     {
       "feature": "stoch_k",
-      "importance": 4.81
+      "importance": 4.62
     },
     {
       "feature": "bb_position",
-      "importance": 4.03
-    },
-    {
-      "feature": "upper_wick",
-      "importance": 3.82
-    },
-    {
-      "feature": "adx",
-      "importance": 3.58
+      "importance": 3.96
     },
     {
       "feature": "lower_wick",
-      "importance": 3.5
+      "importance": 3.81
+    },
+    {
+      "feature": "upper_wick",
+      "importance": 3.73
+    },
+    {
+      "feature": "williams_r",
+      "importance": 3.51
     }
   ],
   "retention_days": 35,
-  "elapsed_sec": 6.36
+  "elapsed_sec": 4.63
 }
