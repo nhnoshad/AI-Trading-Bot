@@ -1,11 +1,23 @@
-// Page-context WebSocket & Canvas Live Price Interceptor for https://market-qx.info/en/demo-trade & Quotex
+// Page-context WebSocket & Canvas Live Price Interceptor for https://market-qx.info/en/trade & Quotex
 (function() {
   'use strict';
-  if (window.__aiTradingBotWsHooked) return;
-  window.__aiTradingBotWsHooked = true;
+  // Stealth hook gate using unguessable internal symbol to avoid window property pollution
+  const HOOK_GATE = Symbol.for('__qx_sock_gate__');
+  if (window[HOOK_GATE]) return;
+  try {
+    Object.defineProperty(window, HOOK_GATE, {
+      value: true,
+      writable: false,
+      configurable: false,
+      enumerable: false
+    });
+  } catch (e) {
+    window[HOOK_GATE] = true;
+  }
 
-  window.__aiBotLivePrices = window.__aiBotLivePrices || {};
-  window.__aiBotLastPrice = null;
+  let privateActiveWsAsset = null;
+  const hookedSockets = new WeakSet();
+  const parsedEvents = new WeakSet();
 
   function emitTick(asset, price, timestamp, rawPriceStr) {
     const p = parseFloat(price);
@@ -18,11 +30,6 @@
     if (typeof rawPriceStr === 'string' && rawPriceStr.includes('.')) {
       decimals = rawPriceStr.split('.')[1].length;
     }
-
-    if (asset) {
-      window.__aiBotLivePrices[String(asset).toUpperCase()] = { price: p, timestamp: ts, decimals };
-    }
-    window.__aiBotLastPrice = { asset: asset || null, price: p, timestamp: ts, decimals };
 
     window.postMessage({
       source: 'AI_BOT_WS_TICK',
@@ -50,14 +57,14 @@
     }
   }
 
-  // 1. Hook WebSocket Constructor (catches new WebSocket connections)
+  // 1. Hook WebSocket Constructor (stealth proxy with native toString)
   const OriginalWebSocket = window.WebSocket;
   function HookedWebSocket(url, protocols) {
     const ws = protocols ? new OriginalWebSocket(url, protocols) : new OriginalWebSocket(url);
-    ws.__aiBotHookedInstance = true;
+    hookedSockets.add(ws);
     ws.addEventListener('message', (event) => {
       try {
-        event.__aiBotParsed = true;
+        parsedEvents.add(event);
         handleRawData(event.data);
       } catch (e) {}
     });
@@ -65,6 +72,9 @@
   }
   HookedWebSocket.prototype = OriginalWebSocket.prototype;
   Object.assign(HookedWebSocket, OriginalWebSocket);
+  try {
+    HookedWebSocket.toString = function() { return 'function WebSocket() { [native code] }'; };
+  } catch (e) {}
   window.WebSocket = HookedWebSocket;
 
   // 2. Hook MessageEvent.prototype.data getter (catches ALREADY-OPEN WebSockets on existing tabs!)
@@ -77,8 +87,8 @@
         get: function() {
           const val = origDataDesc.get.call(this);
           try {
-            if (!this.__aiBotParsed && (this.target instanceof OriginalWebSocket || this.currentTarget instanceof OriginalWebSocket)) {
-              this.__aiBotParsed = true;
+            if (!parsedEvents.has(this) && (this.target instanceof OriginalWebSocket || this.currentTarget instanceof OriginalWebSocket)) {
+              parsedEvents.add(this);
               handleRawData(val);
             }
           } catch (e) {}
@@ -93,12 +103,12 @@
     const origSend = OriginalWebSocket.prototype.send;
     OriginalWebSocket.prototype.send = function(data) {
       try {
-        if (!this.__aiBotHookedInstance) {
-          this.__aiBotHookedInstance = true;
+        if (!hookedSockets.has(this)) {
+          hookedSockets.add(this);
           this.addEventListener('message', (event) => {
             try {
-              if (!event.__aiBotParsed) {
-                event.__aiBotParsed = true;
+              if (!parsedEvents.has(event)) {
+                parsedEvents.add(event);
                 handleRawData(event.data);
               }
             } catch (e) {}
@@ -107,7 +117,7 @@
         if (typeof data === 'string') {
           const m = data.match(/"asset"\s*:\s*"([^"]+)"/i);
           if (m && m[1]) {
-            window.__aiBotActiveWsAsset = m[1];
+            privateActiveWsAsset = m[1];
           }
         }
       } catch (e) {}
@@ -130,7 +140,7 @@
     let parsed;
     try { parsed = JSON.parse(clean); } catch { return; }
 
-    extractFromNode(parsed, window.__aiBotActiveWsAsset || null);
+    extractFromNode(parsed, privateActiveWsAsset || null);
   }
 
   function isLikelyTimestamp(n) {
@@ -246,7 +256,7 @@
 
     if (typeof node === 'object') {
       const asset = node.asset || node.symbol || node.pair || node.instrument || inheritedAsset;
-      if (asset) window.__aiBotActiveWsAsset = asset;
+      if (asset) privateActiveWsAsset = asset;
 
       if (node.open !== undefined && node.close !== undefined && node.high !== undefined && node.low !== undefined) {
         const c = {
@@ -307,7 +317,6 @@
                 if (isBrightBadge && now - lastCanvasPost > 250) {
                   lastCanvasPost = now;
                   const decimals = priceStr.includes('.') ? priceStr.split('.')[1].length : 5;
-                  window.__aiBotCanvasPrice = { price: p, decimals, timestamp: now };
                   window.postMessage({
                     source: 'AI_BOT_CANVAS_PRICE',
                     price: p,
