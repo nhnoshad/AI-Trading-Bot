@@ -204,7 +204,7 @@ async function syncWithActiveTab(forceRescan = false) {
       }
     });
   } catch (err) {
-    console.warn('Sync error:', err);
+    // Silent catch so Chrome doesn't flag normal sync retries as extension errors
   } finally {
     if (scanBtn) scanBtn.disabled = false;
   }
