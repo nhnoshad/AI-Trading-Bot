@@ -787,7 +787,7 @@
       }
     };
 
-    pairWatcherTimer = setInterval(checkPairSwitch, 900);
+    pairWatcherTimer = setInterval(checkPairSwitch, 600);  // Faster 900ms→600ms for snappier pair-switch detection
     document.addEventListener('click', () => {
       if (teardownIfOrphaned()) return;
       setTimeout(checkPairSwitch, 250);

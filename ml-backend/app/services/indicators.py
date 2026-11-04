@@ -147,18 +147,48 @@ def calculate_indicators(candles: List[Dict[str, Any]]) -> pd.DataFrame:
         consec.append(count)
     df['consecutive_same_direction'] = consec
 
+    # ── ADVANCED FEATURES (5 new — accuracy upgrade) ─────────────────────────
+
+    # 1. Volume momentum ratio: current volume vs rolling 20-bar average
+    #    > 1.0 = volume spike (breakout confirmation); < 1.0 = quiet/indecisive
+    vol_sma20 = df['volume'].rolling(20).mean()
+    df['volume_sma_ratio'] = df['volume'] / (vol_sma20 + 1e-9)
+
+    # 2. RSI acceleration (slope): rate-of-change of RSI-14 over last 3 bars
+    #    Positive = RSI gaining momentum (bullish), Negative = RSI losing momentum (bearish)
+    #    Key for divergence: price makes new high but RSI_slope < 0 → hidden bearish divergence
+    df['rsi_slope_3'] = df['rsi_14'].diff(3)
+
+    # 3. 10-bar momentum normalized by ATR (dimensionless, pair-agnostic)
+    #    Measures how far price has traveled in 10 candles relative to its own volatility
+    df['price_momentum_10'] = df['close'].diff(10) / (atr14 * 10 + 1e-9) * 100.0
+
+    # 4. Candle directionality: signed body/range ratio (−1 = fully bearish, +1 = fully bullish)
+    #    More informative than separate body/range because it encodes direction
+    sign = np.where(df['close'] >= df['open'], 1.0, -1.0)
+    df['candle_directionality'] = sign * df['candle_body_ratio']
+
+    # 5. Bollinger Band squeeze flag: 1 when volatility is compressed below its own 50-bar median
+    #    A squeeze followed by an expansion is one of the highest-probability setups
+    bb_width_median = df['bb_width'].rolling(50).median()
+    df['bb_squeeze'] = (df['bb_width'] < bb_width_median).astype(int)
+
     df.replace([np.inf, -np.inf], np.nan, inplace=True)
     df.fillna(0, inplace=True)
     return df
 
 
 FEATURE_COLUMNS = [
+    # Original 28 indicators
     'rsi_14', 'rsi_7', 'stoch_k', 'stoch_d', 'williams_r', 'cci',
     'ema_9', 'ema_21', 'sma_50', 'macd_line', 'macd_signal', 'macd_hist',
     'ema_cross', 'adx', 'bb_width', 'bb_position', 'atr_14',
     'price_change_1', 'price_change_3', 'price_change_5', 'candle_body_ratio',
     'body_size', 'upper_wick', 'lower_wick', 'is_doji', 'is_hammer',
-    'is_engulfing', 'consecutive_same_direction'
+    'is_engulfing', 'consecutive_same_direction',
+    # 5 new advanced features (v2 — accuracy upgrade)
+    'volume_sma_ratio', 'rsi_slope_3', 'price_momentum_10',
+    'candle_directionality', 'bb_squeeze',
 ]
 
 

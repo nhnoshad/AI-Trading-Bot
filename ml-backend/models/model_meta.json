@@ -1,6 +1,6 @@
 {
-  "version": "1.0.64",
-  "trained_at": "2026-11-01T14:32:48.940419Z",
+  "version": "1.0.0",
+  "trained_at": "2026-11-04T18:31:43.973772",
   "features": [
     "rsi_14",
     "rsi_7",
@@ -29,113 +29,15 @@
     "is_doji",
     "is_hammer",
     "is_engulfing",
-    "consecutive_same_direction"
+    "consecutive_same_direction",
+    "volume_sma_ratio",
+    "rsi_slope_3",
+    "price_momentum_10",
+    "candle_directionality",
+    "bb_squeeze"
   ],
-  "n_samples": 10975,
-  "train_size": 8780,
-  "test_size": 2195,
-  "accuracy": 0.5362,
-  "precision": 0.6088,
-  "recall": 0.5658,
-  "f1_score": 0.5865,
-  "confusion_matrix": [
-    [
-      455,
-      464
-    ],
-    [
-      554,
-      722
-    ]
-  ],
-  "sub_models": [
-    {
-      "model": "XGBoost",
-      "accuracy": "53.6%",
-      "precision": "61.2%",
-      "recall": "54.9%",
-      "f1": "57.9%",
-      "weight": "23%",
-      "status": "Active"
-    },
-    {
-      "model": "LightGBM",
-      "accuracy": "53.5%",
-      "precision": "61.2%",
-      "recall": "54.5%",
-      "f1": "57.7%",
-      "weight": "26%",
-      "status": "Active"
-    },
-    {
-      "model": "CatBoost",
-      "accuracy": "52.8%",
-      "precision": "60.5%",
-      "recall": "53.8%",
-      "f1": "57.0%",
-      "weight": "27%",
-      "status": "Active"
-    },
-    {
-      "model": "Random Forest",
-      "accuracy": "53.6%",
-      "precision": "61.5%",
-      "recall": "53.8%",
-      "f1": "57.4%",
-      "weight": "22%",
-      "status": "Active"
-    }
-  ],
-  "feature_importance": [
-    {
-      "feature": "rsi_14",
-      "importance": 10.27
-    },
-    {
-      "feature": "rsi_7",
-      "importance": 7.41
-    },
-    {
-      "feature": "cci",
-      "importance": 6.26
-    },
-    {
-      "feature": "atr_14",
-      "importance": 5.91
-    },
-    {
-      "feature": "bb_width",
-      "importance": 5.82
-    },
-    {
-      "feature": "macd_signal",
-      "importance": 4.86
-    },
-    {
-      "feature": "stoch_d",
-      "importance": 4.47
-    },
-    {
-      "feature": "stoch_k",
-      "importance": 4.07
-    },
-    {
-      "feature": "bb_position",
-      "importance": 3.82
-    },
-    {
-      "feature": "upper_wick",
-      "importance": 3.75
-    },
-    {
-      "feature": "lower_wick",
-      "importance": 3.71
-    },
-    {
-      "feature": "price_change_1",
-      "importance": 3.49
-    }
-  ],
-  "retention_days": 35,
-  "elapsed_sec": 6.51
+  "n_samples": 11042,
+  "train_size": 8833,
+  "test_size": 2209,
+  "accuracy": 0.5323675871435039
 }

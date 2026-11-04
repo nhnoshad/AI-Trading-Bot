@@ -38,7 +38,7 @@ class TradingPredictor:
         self.rf_model = None
         self.scaler = None
         self.model_version = settings.MODEL_VERSION
-        self.confidence_threshold = 0.60
+        self.confidence_threshold = 0.62   # Raised from 0.60 — eliminates borderline weak signals
         self.last_prediction_time: Optional[str] = None
         self.start_time = time.time()
         self._load_models()
@@ -248,24 +248,49 @@ class TradingPredictor:
             ml_dir = int(np.argmax(ml_proba))
             ml_conf = float(ml_proba[ml_dir])
 
-            # Combine trained ML model probability with live 28-indicator technical confirmation
+            # ── Vote majority check: at least 2 of 4 sub-models must agree ──────────
+            # This prevents a single high-confidence outlier from overruling consensus.
+            if model_preds:
+                votes_buy = sum(1 for v in model_preds.values() if v > 0.50)
+                votes_sell = sum(1 for v in model_preds.values() if v <= 0.50)
+                n_models = len(model_preds)
+                majority_agrees = (ml_dir == 1 and votes_buy >= max(2, n_models // 2)) or \
+                                  (ml_dir == 0 and votes_sell >= max(2, n_models // 2))
+                if not majority_agrees:
+                    # Minority direction — push toward WAIT
+                    ml_conf = min(ml_conf, 0.61)
+
+            # ── ADX-aware trend gate ──────────────────────────────────────────────────
+            adx_val = float(latest_row.get('adx', 0))
+            # Choppy/no-trend market: suppress signals unless ML is very strong
+            adx_choppy = adx_val < 18
+            # Strong trend: allow threshold to relax slightly
+            adx_trending = adx_val > 28
+
+            # ── Combine ML + indicator rule with ADX-adaptive blend ───────────────────
             if rule_dir == -1:
-                # Indicators show sideways / chop: only trade if ML confidence is very strong (>78%)
-                if ml_conf >= 0.78:
+                # Indicators show sideways/chop: only trade if ML confidence is very strong (>78%)
+                if ml_conf >= 0.78 and not adx_choppy:
                     prediction = ml_dir
                     confidence_raw = ml_conf * 0.85
                 else:
                     prediction = -1
                     confidence_raw = 0.54
             elif rule_dir == ml_dir:
-                # Both trained ML model and technical indicators agree -> High confidence BUY or SELL
+                # Both trained ML model and technical indicators agree → High confidence
                 prediction = ml_dir
-                # FIX: Removed the +0.06 constant bias that was artificially inflating ALL signals.
-                # Using +0.02 as a minimal agreement bonus only when both ML and rules fully agree.
-                confidence_raw = min(0.95, ml_conf * 0.60 + rule_conf * 0.40 + 0.02)
+                # ADX trending: trust ML more (65% weight); ranging: trust indicators more (45%)
+                ml_weight = 0.65 if adx_trending else 0.60
+                rule_weight = 1.0 - ml_weight
+                confidence_raw = min(0.95, ml_conf * ml_weight + rule_conf * rule_weight + 0.02)
+                # Extra suppression in choppy markets even when both agree
+                if adx_choppy and confidence_raw < 0.72:
+                    prediction = -1
+                    confidence_raw = 0.54
             else:
                 # ML model and short-term indicators disagree: pick stronger or WAIT if close
-                if abs(ml_conf - rule_conf) < 0.08:
+                # Widened disagreement gap from 0.08 → 0.10 (more conservative)
+                if abs(ml_conf - rule_conf) < 0.10:
                     prediction = -1
                     confidence_raw = 0.55
                 elif ml_conf > rule_conf:
@@ -274,6 +299,10 @@ class TradingPredictor:
                 else:
                     prediction = rule_dir
                     confidence_raw = max(0.61, rule_conf * 0.88)
+                # In choppy market + disagreement → always WAIT
+                if adx_choppy:
+                    prediction = -1
+                    confidence_raw = 0.54
         else:
             prediction, confidence_raw = rule_dir, rule_conf
             p_up = confidence_raw if prediction == 1 else (1.0 - confidence_raw)

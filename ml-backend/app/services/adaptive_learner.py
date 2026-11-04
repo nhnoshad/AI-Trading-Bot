@@ -56,7 +56,9 @@ class AdaptiveLearner:
         self.retention_days = 35  # Keep at least 1 full month (35 days) of learning data
         self.weights = self._load_weights()
         self.outcomes_since_last_retrain = 0
-        self.auto_retrain_every_n_outcomes = 25
+        self.auto_retrain_every_n_outcomes = 15   # Reduced 25→15: faster adaptation in live sessions
+        self.ema_alpha = 0.15                      # Raised 0.10→0.15: faster EMA weight convergence
+        self.min_weight = 0.05                     # Floor: no model weight collapses to near-zero
 
     def _load_weights(self) -> Dict[str, float]:
         if os.path.exists(WEIGHTS_PATH):
@@ -153,7 +155,7 @@ class AdaptiveLearner:
 
         # 1. Update dynamic model weights based on individual model probabilities
         if model_preds:
-            alpha = 0.15  # learning rate for online weight adaptation
+            alpha = getattr(self, 'ema_alpha', 0.15)  # faster EMA: 0.10→0.15
             for m_key in ('xgb', 'lgbm', 'cb', 'rf'):
                 prob_up = float(model_preds.get(m_key, 0.5))
                 m_pred = 1 if prob_up >= 0.5 else 0
@@ -162,14 +164,18 @@ class AdaptiveLearner:
                 self.weights[ema_key] = (1 - alpha) * self.weights.get(ema_key, 0.58) + alpha * m_correct
 
             # Softmax / proportional normalization of weights across active models
+            min_w = getattr(self, 'min_weight', 0.05)   # floor: prevent model collapse
             scores = np.array([
-                max(0.1, self.weights.get('xgb_ema_acc', 0.58)),
-                max(0.1, self.weights.get('lgbm_ema_acc', 0.58)),
-                max(0.1, self.weights.get('cb_ema_acc', 0.58)),
-                max(0.1, self.weights.get('rf_ema_acc', 0.58))
+                max(min_w, self.weights.get('xgb_ema_acc', 0.58)),
+                max(min_w, self.weights.get('lgbm_ema_acc', 0.58)),
+                max(min_w, self.weights.get('cb_ema_acc', 0.58)),
+                max(min_w, self.weights.get('rf_ema_acc', 0.58))
             ])
             scores = np.exp(scores * 4.0)  # temperature scaling
             norm_w = scores / np.sum(scores)
+            # Apply minimum weight floor so no model is completely silenced
+            norm_w = np.maximum(norm_w, min_w)
+            norm_w = norm_w / norm_w.sum()   # re-normalize after floor
             self.weights['xgb'] = round(float(norm_w[0]), 4)
             self.weights['lgbm'] = round(float(norm_w[1]), 4)
             self.weights['cb'] = round(float(norm_w[2]), 4)

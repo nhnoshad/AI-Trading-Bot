@@ -40,10 +40,26 @@ def load_and_process_data(csv_path: str) -> tuple:
     print(f'Raw rows: {len(df)}')
 
     # Check if indicators are already pre-calculated in the dataset
-    has_features = all(f in df.columns for f in FEATURE_COLUMNS)
-    if has_features:
+    # Use the AVAILABLE features (the new 5 may not be in older CSV data)
+    old_28_features = [
+        'rsi_14', 'rsi_7', 'stoch_k', 'stoch_d', 'williams_r', 'cci',
+        'ema_9', 'ema_21', 'sma_50', 'macd_line', 'macd_signal', 'macd_hist',
+        'ema_cross', 'adx', 'bb_width', 'bb_position', 'atr_14',
+        'price_change_1', 'price_change_3', 'price_change_5', 'candle_body_ratio',
+        'body_size', 'upper_wick', 'lower_wick', 'is_doji', 'is_hammer',
+        'is_engulfing', 'consecutive_same_direction'
+    ]
+    has_base_features = all(f in df.columns for f in old_28_features)
+    if has_base_features:
         print('Using pre-calculated technical indicator features from dataset...')
         df_features = df.copy()
+        # For the 5 new features not yet in older CSV, fill with 0 as neutral placeholder
+        new_features = ['volume_sma_ratio', 'rsi_slope_3', 'price_momentum_10',
+                        'candle_directionality', 'bb_squeeze']
+        for nf in new_features:
+            if nf not in df_features.columns:
+                df_features[nf] = 0.0
+                print(f'  [info] New feature "{nf}" not in CSV — filled with 0 (neutral). Re-collect live data to include it.')
     else:
         # Calculate indicators from raw OHLCV
         print('Calculating technical indicators from OHLCV candles...')
@@ -60,7 +76,7 @@ def load_and_process_data(csv_path: str) -> tuple:
 
     df_features.dropna(subset=['label'], inplace=True)
 
-    # Features and target
+    # Features and target — only use columns that exist
     available_features = [f for f in FEATURE_COLUMNS if f in df_features.columns]
     X = df_features[available_features].values
     y = df_features['label'].values.astype(int)
@@ -73,9 +89,9 @@ def load_and_process_data(csv_path: str) -> tuple:
 def train_models(X_train, y_train):
     print('\nTraining XGBoost...')
     xgb = XGBClassifier(
-        n_estimators=300, max_depth=6, learning_rate=0.05,
-        subsample=0.8, colsample_bytree=0.8, min_child_weight=5,
-        gamma=0.1, reg_alpha=0.1, reg_lambda=1.0,
+        n_estimators=400, max_depth=5, learning_rate=0.04,
+        subsample=0.75, colsample_bytree=0.75, min_child_weight=8,
+        gamma=0.15, reg_alpha=0.2, reg_lambda=1.5,
         scale_pos_weight=1, random_state=42,
         eval_metric='logloss', verbosity=0
     )
@@ -83,9 +99,9 @@ def train_models(X_train, y_train):
 
     print('Training LightGBM...')
     lgbm = LGBMClassifier(
-        n_estimators=300, max_depth=6, learning_rate=0.05,
-        num_leaves=31, subsample=0.8, colsample_bytree=0.8,
-        min_child_samples=20, reg_alpha=0.1, reg_lambda=0.1,
+        n_estimators=400, max_depth=5, learning_rate=0.04,
+        num_leaves=24, subsample=0.75, colsample_bytree=0.75,
+        min_child_samples=25, reg_alpha=0.2, reg_lambda=0.2,
         random_state=42, verbosity=-1
     )
     lgbm.fit(X_train, y_train)
@@ -94,15 +110,17 @@ def train_models(X_train, y_train):
     if CATBOOST_AVAILABLE:
         print('Training CatBoost...')
         cb = CatBoostClassifier(
-            iterations=300, depth=6, learning_rate=0.05,
+            iterations=400, depth=5, learning_rate=0.04,
+            border_count=128, bagging_temperature=0.5,
+            l2_leaf_reg=5.0, random_strength=1.5,
             verbose=0, random_seed=42
         )
         cb.fit(X_train, y_train)
 
     print('Training Random Forest...')
     rf = RandomForestClassifier(
-        n_estimators=300, max_depth=10, min_samples_split=10,
-        min_samples_leaf=5, max_features='sqrt',
+        n_estimators=400, max_depth=8, min_samples_split=15,
+        min_samples_leaf=8, max_features='sqrt',
         class_weight='balanced', random_state=42, n_jobs=-1
     )
     rf.fit(X_train, y_train)
