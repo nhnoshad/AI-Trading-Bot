@@ -109,8 +109,9 @@ async def predict(request: PredictRequest, db: Session = Depends(get_db)):
         current_close = result['entry_price']
         for prev_sig in matured_signals:
             if prev_sig.entry_price and current_close != prev_sig.entry_price:
-                # Require a minimum pip movement to avoid flat-market false WIN
-                min_move = 0.01 if prev_sig.entry_price > 100 else 0.00005
+                # Adaptive min movement for Currencies, Crypto, Commodities, Stocks
+                ep = prev_sig.entry_price
+                min_move = 0.10 if ep > 1000 else (0.02 if ep > 100 else (0.0001 if ep > 1 else (0.00005 if ep > 0.01 else ep * 0.001)))
                 price_diff = abs(current_close - prev_sig.entry_price)
                 if price_diff < min_move:
                     # Price barely moved — skip to avoid corrupting learning data

@@ -274,15 +274,95 @@
     return String(raw).toUpperCase().replace(/(_OTC|\(OTC\)|\bOTC\b)/gi, '').replace(/[^A-Z0-9]/g, '');
   }
 
+  // Canonical mapping for Crypto, Commodities, Stocks and OTC variants on Quotex
+  const ASSET_ALIASES = {
+    // Crypto
+    'BTCUSD': 'Bitcoin', 'BTC/USD': 'Bitcoin', 'BITCOIN': 'Bitcoin',
+    'ETHUSD': 'Ethereum', 'ETH/USD': 'Ethereum', 'ETHEREUM': 'Ethereum',
+    'AVAXUSD': 'Avalanche', 'AVALANCHE': 'Avalanche',
+    'LTCUSD': 'Litecoin', 'LTC/USD': 'Litecoin', 'LITECOIN': 'Litecoin',
+    'TRUMPUSD': 'Trump', 'TRUMP': 'Trump',
+    'SOLUSD': 'Solana', 'SOL/USD': 'Solana', 'SOLANA': 'Solana',
+    'ETCUSD': 'Ethereum Classic', 'ETHEREUMCLASSIC': 'Ethereum Classic',
+    'XRPUSD': 'Ripple', 'XRP/USD': 'Ripple', 'RIPPLE': 'Ripple',
+    'TONUSD': 'Toncoin', 'TONCOIN': 'Toncoin',
+    'DASHUSD': 'Dash', 'DASH': 'Dash',
+    'DOTUSD': 'Polkadot', 'POLKADOT': 'Polkadot',
+    'BNBUSD': 'Binance Coin', 'BINANCECOIN': 'Binance Coin',
+    'ZECUSD': 'Zcash', 'ZCASH': 'Zcash',
+    'ADAUSD': 'Cardano', 'CARDANO': 'Cardano',
+    'DOGEUSD': 'Dogecoin', 'DOGECOIN': 'Dogecoin',
+    'SHIBUSD': 'Shiba Inu', 'SHIBAINU': 'Shiba Inu',
+
+    // Commodities
+    'XAUUSD': 'Gold', 'XAU/USD': 'Gold', 'GOLD': 'Gold',
+    'XAGUSD': 'Silver', 'XAG/USD': 'Silver', 'SILVER': 'Silver',
+    'UKBRENT': 'UKBrent', 'BRENT': 'UKBrent',
+    'USCRUDE': 'USCrude', 'WTI': 'USCrude', 'CRUDEOIL': 'USCrude',
+    'XPTUSD': 'Platinum', 'PLATINUM': 'Platinum',
+    'XPDUSD': 'Palladium', 'PALLADIUM': 'Palladium',
+    'NATURALGAS': 'Natural Gas', 'NG': 'Natural Gas',
+
+    // Stocks
+    'AAPL': 'Apple', 'APPLE': 'Apple',
+    'BA': 'Boeing', 'BOEING': 'Boeing',
+    'MSFT': 'Microsoft', 'MICROSOFT': 'Microsoft',
+    'TSLA': 'Tesla', 'TESLA': 'Tesla',
+    'INTC': 'Intel', 'INTEL': 'Intel',
+    'AMZN': 'Amazon', 'AMAZON': 'Amazon',
+    'META': 'Meta', 'FACEBOOK': 'Meta',
+    'GOOGL': 'Google', 'GOOGLE': 'Google', 'ALPHABET': 'Google',
+    'NFLX': 'Netflix', 'NETFLIX': 'Netflix',
+    'NVDA': 'Nvidia', 'NVIDIA': 'Nvidia',
+    'MCD': "McDonald's", 'MCDONALDS': "McDonald's",
+    'PFE': 'Pfizer', 'PFIZER': 'Pfizer',
+    'JNJ': 'Johnson & Johnson', 'JOHNSONJOHNSON': 'Johnson & Johnson',
+    'AXP': 'American Express', 'AMERICANEXPRESS': 'American Express',
+    'CSCO': 'Cisco', 'CISCO': 'Cisco',
+    'KO': 'Coca-Cola', 'COCACOLA': 'Coca-Cola',
+    'BABA': 'Alibaba', 'ALIBABA': 'Alibaba',
+    'DIS': 'Disney', 'DISNEY': 'Disney',
+    'V': 'Visa', 'VISA': 'Visa'
+  };
+
   function normalizePairName(raw) {
     if (!raw) return currentPair;
-    const s = String(raw).trim().toUpperCase();
+    let s = String(raw).trim();
     const isOtc = /(_OTC|\(OTC\)|\bOTC\b)/i.test(s);
-    let core = s.replace(/(_OTC|\(OTC\)|\bOTC\b)/gi, '').replace(/\s+/g, '').trim();
-    if (/^[A-Z]{6}$/.test(core)) {
-      core = core.slice(0, 3) + '/' + core.slice(3, 6);
+
+    // Strip OTC tag, extra percentages (e.g. 92%), and clean edges
+    let core = s
+      .replace(/(_OTC|\(OTC\)|\bOTC\b)/gi, '')
+      .replace(/\s*\d{1,3}%\s*/g, ' ')
+      .replace(/[×✕]/g, '')
+      .trim();
+    core = core.replace(/\s+/g, ' ');
+
+    // Check alias lookup (e.g. BTCUSD_otc -> Bitcoin (OTC))
+    const lookupKey = core.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (ASSET_ALIASES[lookupKey]) {
+      const aliasName = ASSET_ALIASES[lookupKey];
+      return isOtc ? `${aliasName} (OTC)` : aliasName;
     }
-    return isOtc ? `${core} (OTC)` : core;
+
+    // 6-letter currency pair (e.g. EURUSD -> EUR/USD)
+    const compact = core.toUpperCase().replace(/[^A-Z]/g, '');
+    const nonCurrencyExclusions = ['BITCOI', 'ETHERE', 'LITECO', 'SOLANA', 'RIPPLE', 'BOEING', 'AMAZON', 'DISNEY', 'PFIZER', 'CARDAN'];
+    if (compact.length === 6 && !nonCurrencyExclusions.some(k => compact.startsWith(k))) {
+      core = `${compact.slice(0, 3)}/${compact.slice(3, 6)}`;
+      return isOtc ? `${core} (OTC)` : core;
+    }
+
+    // Format multi-word assets cleanly (title case words, preserve special chars)
+    const words = core.split(' ');
+    const formatted = words.map(w => {
+      const upper = w.toUpperCase();
+      if (/^(OTC|USD|EUR|GBP|JPY|AUD|CAD|CHF|NZD|BRL|INR|US|UK|NGN|BDT|TRY|EGP)$/i.test(upper)) return upper;
+      if (w.includes('&') || w.includes("'")) return w;
+      return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+    }).join(' ');
+
+    return isOtc ? `${formatted} (OTC)` : formatted;
   }
 
   function recordLivePairPrice(pair, price, decimals = null) {
@@ -410,7 +490,8 @@
   }
 
   // ── 3. Smart Pair, Price & Chart Canvas Scanner for market-qx.info ─────────
-  const PAIR_REGEX = /([A-Z]{3}\s*\/\s*[A-Z]{3}(?:\s*\(OTC\))?|[A-Z]{2,10}\s*\(OTC\)|Bitcoin|Ethereum|Gold|Silver|UKBrent|USCrude)/i;
+  // Matches all Currencies, Crypto, Commodities, Stocks and their OTC variants on Quotex
+  const PAIR_REGEX = /([A-Z]{3}\s*[\/\-_]\s*[A-Z]{3}(?:\s*\(OTC\))?|[A-Za-z0-9\.\&\'\s]{2,30}?\s*(?:\(OTC\)|_OTC|\bOTC\b)|Bitcoin|Ethereum|Avalanche|Litecoin|Trump|Solana|Ethereum\s*Classic|Ripple|Toncoin|Dash|Polkadot|Binance\s*Coin|Zcash|Cardano|Dogecoin|Shiba\s*Inu|Gold|Silver|UKBrent|USCrude|Platinum|Palladium|Natural\s*Gas|Crude\s*Oil|Apple|Boeing|Microsoft|Tesla|Intel|Amazon|Meta|Facebook|Google|Alphabet|Netflix|Nvidia|McDonald\'?s|Pfizer|Johnson\s*&\s*Johnson|American\s*Express|Cisco|Coca-Cola|Alibaba|Disney|Visa)/i;
 
   function detectActivePairFromPage() {
     const activeTabSelectors = [
@@ -418,8 +499,11 @@
       '.tab.active .tab__label',
       '.tabs__item--active .tabs__label',
       '.tabs__item.active',
+      '.tabs__item--active',
+      '.tab--active',
       '[class*="tab"][class*="active"] [class*="label"]',
       '[class*="tab"][class*="active"] [class*="title"]',
+      '[class*="tab"][class*="active"] [class*="name"]',
       '[class*="asset-select"] [class*="title"]',
       '[class*="current-asset"]',
       '.section-deal__name',
@@ -433,8 +517,8 @@
         if (!el || !el.textContent) continue;
         const txt = el.textContent.trim().replace(/\s+/g, ' ');
         const m = txt.match(PAIR_REGEX);
-        if (m) return normalizePairName(m[1]);
-        if (txt.length >= 3 && txt.length <= 22 && /[A-Z]/i.test(txt) && !/demo|live|account|balance|trade|timer/i.test(txt)) {
+        if (m) return normalizePairName(m[0]);
+        if (txt.length >= 3 && txt.length <= 32 && /[A-Z]/i.test(txt) && !/demo|live|account|balance|trade|timer|deposit|withdrawal|settings|history/i.test(txt)) {
           return normalizePairName(txt);
         }
       }
@@ -445,19 +529,19 @@
       const el = candidates[i];
       if (!el || el.children.length > 2) continue;
       const txt = (el.textContent || '').trim().replace(/\s+/g, ' ');
-      if (txt.length >= 6 && txt.length <= 20) {
-        const m = txt.match(/^([A-Z]{3}\/[A-Z]{3}(?:\s*\(OTC\))?)$/i);
+      if (txt.length >= 4 && txt.length <= 32) {
+        const m = txt.match(PAIR_REGEX);
         if (m) {
           const rect = el.getBoundingClientRect();
           if (rect.width > 10 && rect.height > 8 && rect.top >= 0 && rect.top < 250) {
-            return normalizePairName(m[1]);
+            return normalizePairName(m[0]);
           }
         }
       }
     }
 
     const titleMatch = document.title.match(PAIR_REGEX);
-    if (titleMatch) return normalizePairName(titleMatch[1]);
+    if (titleMatch) return normalizePairName(titleMatch[0]);
 
     // Return null when no open pair tab is active on the page!
     return null;
@@ -614,6 +698,7 @@
   function getBasePriceForPair(pair) {
     const clean = getCorePairKey(pair);
     const map = {
+      // Currencies
       EURUSD: 1.0854, GBPUSD: 1.2742, USDJPY: 151.45, AUDUSD: 0.6580,
       USDCAD: 1.3590, USDCHF: 0.8840, EURGBP: 0.8540, EURJPY: 164.30,
       GBPJPY: 192.80, EURAUD: 1.6520, EURCAD: 1.4860, EURCHF: 0.9620,
@@ -624,7 +709,55 @@
       USDBDT: 119.50, USDINR: 84.560, USDBRL: 5.0520, BRLUSD: 0.1980,
       USDPKR: 278.40, USDEGP: 48.65, USDTRY: 34.25, USDMXN: 19.85,
       USDZAR: 17.65, USDNGN: 1640.0, USDIDR: 15650.0, USDPHP: 57.40,
-      USDCOP: 4210.0, USDARS: 985.50, USDDZD: 133.80
+      USDCOP: 4210.0, USDARS: 985.50, USDDZD: 133.80,
+
+      // Crypto
+      BITCOIN: 70000.0, BTCUSD: 70000.0,
+      ETHEREUM: 2550.0, ETHUSD: 2550.0,
+      AVALANCHE: 26.50, AVAXUSD: 26.50,
+      LITECOIN: 68.50, LTCUSD: 68.50,
+      TRUMP: 16.50, TRUMPUSD: 16.50,
+      SOLANA: 175.0, SOLUSD: 175.0,
+      ETHEREUMCLASSIC: 19.50, ETCUSD: 19.50,
+      RIPPLE: 0.525, XRPUSD: 0.525,
+      TONCOIN: 4.90, TONUSD: 4.90,
+      DASH: 24.50, DASHUSD: 24.50,
+      POLKADOT: 4.25, DOTUSD: 4.25,
+      BINANCECOIN: 585.0, BNBUSD: 585.0,
+      ZCASH: 38.50, ZECUSD: 38.50,
+      CARDANO: 0.355, ADAUSD: 0.355,
+      DOGECOIN: 0.165, DOGEUSD: 0.165,
+      SHIBAINU: 0.0000185, SHIBUSD: 0.0000185,
+
+      // Commodities
+      GOLD: 2740.0, XAUUSD: 2740.0,
+      SILVER: 32.50, XAGUSD: 32.50,
+      UKBRENT: 74.50, BRENT: 74.50,
+      USCRUDE: 70.50, WTI: 70.50, CRUDEOIL: 70.50,
+      PLATINUM: 985.0, XPTUSD: 985.0,
+      PALLADIUM: 1060.0, XPDUSD: 1060.0,
+      NATURALGAS: 2.85, NG: 2.85,
+
+      // Stocks
+      APPLE: 225.0, AAPL: 225.0,
+      BOEING: 155.0, BA: 155.0,
+      MICROSOFT: 415.0, MSFT: 415.0,
+      TESLA: 250.0, TSLA: 250.0,
+      INTEL: 22.50, INTC: 22.50,
+      AMAZON: 195.0, AMZN: 195.0,
+      META: 580.0, FACEBOOK: 580.0,
+      GOOGLE: 175.0, ALPHABET: 175.0, GOOGL: 175.0,
+      NETFLIX: 760.0, NFLX: 760.0,
+      NVIDIA: 140.0, NVDA: 140.0,
+      MCDONALDS: 295.0, MCD: 295.0,
+      PFIZER: 28.0, PFE: 28.0,
+      JOHNSONJOHNSON: 160.0, JNJ: 160.0,
+      AMERICANEXPRESS: 270.0, AXP: 270.0,
+      CISCO: 55.0, CSCO: 55.0,
+      COCACOLA: 65.0, KO: 65.0,
+      ALIBABA: 95.0, BABA: 95.0,
+      DISNEY: 96.0, DIS: 96.0,
+      VISA: 280.0, V: 280.0
     };
     for (const [k, v] of Object.entries(map)) {
       if (clean.startsWith(k)) return v;
@@ -638,9 +771,11 @@
     const norm = normalizePairName(pair);
     if (pairDecimals[norm]) return pairDecimals[norm];
     if (lastCanvasPrice && lastCanvasPrice.decimals) return lastCanvasPrice.decimals;
-    if (priceVal > 500) return 2;
-    if (priceVal > 20) return 3;
-    return 5;
+    if (priceVal > 500) return 2;   // BTC, ETH, Gold, BNB, Stocks like MSFT, NFLX
+    if (priceVal > 20) return 2;    // Stocks, Oil, Avalanche, Dash, Silver, Zcash -> 2 decimals
+    if (priceVal > 2) return 3;     // Toncoin, Polkadot, Gas -> 3 decimals
+    if (priceVal < 0.001) return 8; // Micro-crypto (Shiba Inu, etc.)
+    return 5;                       // Currencies, Ripple, Cardano -> 5 decimals
   }
 
   function deterministicUnitRand(pairHash, stepIndex, salt = 0) {
@@ -976,7 +1111,8 @@
 
     // Require a meaningful price movement (> 0.5 pip) to avoid false WIN
     // when entry === close due to price stale / same-tick conditions
-    const minMovePips = entryPrice > 100 ? 0.01 : 0.00005; // JPY pairs vs majors
+    // Adaptive price movement floor across all asset classes (Crypto, Commodities, Stocks, Currencies)
+    const minMovePips = entryPrice > 1000 ? 0.10 : (entryPrice > 100 ? 0.02 : (entryPrice > 1 ? 0.0001 : (entryPrice > 0.01 ? 0.00005 : entryPrice * 0.001)));
     const priceDiff = Math.abs(closePrice - entryPrice);
     if (priceDiff < minMovePips) {
       console.log('[AI Bot] evaluateAndRecordCandleOutcome: price move too small (%s) — skipping flat candle', priceDiff.toFixed(6));

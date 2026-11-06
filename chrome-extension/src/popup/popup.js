@@ -260,6 +260,7 @@ async function requestBackendPredictionForPair(pair, livePrice = null) {
 function getFallbackPriceForPair(pair) {
   const clean = String(pair).toUpperCase().replace(/(_OTC|\(OTC\)|\bOTC\b)/gi, '').replace(/[^A-Z0-9]/g, '');
   const map = {
+    // Currencies
     EURUSD: 1.0854, GBPUSD: 1.2742, USDJPY: 151.45, AUDUSD: 0.6580,
     USDCAD: 1.3590, USDCHF: 0.8840, EURGBP: 0.8540, EURJPY: 164.30,
     GBPJPY: 192.80, EURAUD: 1.6520, EURCAD: 1.4860, EURCHF: 0.9620,
@@ -268,7 +269,57 @@ function getFallbackPriceForPair(pair) {
     AUDJPY: 99.65, CADJPY: 111.40, CHFJPY: 171.20, NZDJPY: 91.80,
     NZDUSD: 0.6090, NZDCAD: 0.8240, NZDCHF: 0.5380, CADCHF: 0.6510,
     USDBDT: 119.50, USDINR: 84.560, USDBRL: 5.0520, BRLUSD: 0.1980,
-    USDPKR: 278.40, USDEGP: 48.65, USDTRY: 34.25
+    USDPKR: 278.40, USDEGP: 48.65, USDTRY: 34.25, USDMXN: 19.85,
+    USDZAR: 17.65, USDNGN: 1640.0, USDIDR: 15650.0, USDPHP: 57.40,
+    USDCOP: 4210.0, USDARS: 985.50, USDDZD: 133.80,
+
+    // Crypto
+    BITCOIN: 70000.0, BTCUSD: 70000.0,
+    ETHEREUM: 2550.0, ETHUSD: 2550.0,
+    AVALANCHE: 26.50, AVAXUSD: 26.50,
+    LITECOIN: 68.50, LTCUSD: 68.50,
+    TRUMP: 16.50, TRUMPUSD: 16.50,
+    SOLANA: 175.0, SOLUSD: 175.0,
+    ETHEREUMCLASSIC: 19.50, ETCUSD: 19.50,
+    RIPPLE: 0.525, XRPUSD: 0.525,
+    TONCOIN: 4.90, TONUSD: 4.90,
+    DASH: 24.50, DASHUSD: 24.50,
+    POLKADOT: 4.25, DOTUSD: 4.25,
+    BINANCECOIN: 585.0, BNBUSD: 585.0,
+    ZCASH: 38.50, ZECUSD: 38.50,
+    CARDANO: 0.355, ADAUSD: 0.355,
+    DOGECOIN: 0.165, DOGEUSD: 0.165,
+    SHIBAINU: 0.0000185, SHIBUSD: 0.0000185,
+
+    // Commodities
+    GOLD: 2740.0, XAUUSD: 2740.0,
+    SILVER: 32.50, XAGUSD: 32.50,
+    UKBRENT: 74.50, BRENT: 74.50,
+    USCRUDE: 70.50, WTI: 70.50, CRUDEOIL: 70.50,
+    PLATINUM: 985.0, XPTUSD: 985.0,
+    PALLADIUM: 1060.0, XPDUSD: 1060.0,
+    NATURALGAS: 2.85, NG: 2.85,
+
+    // Stocks
+    APPLE: 225.0, AAPL: 225.0,
+    BOEING: 155.0, BA: 155.0,
+    MICROSOFT: 415.0, MSFT: 415.0,
+    TESLA: 250.0, TSLA: 250.0,
+    INTEL: 22.50, INTC: 22.50,
+    AMAZON: 195.0, AMZN: 195.0,
+    META: 580.0, FACEBOOK: 580.0,
+    GOOGLE: 175.0, ALPHABET: 175.0, GOOGL: 175.0,
+    NETFLIX: 760.0, NFLX: 760.0,
+    NVIDIA: 140.0, NVDA: 140.0,
+    MCDONALDS: 295.0, MCD: 295.0,
+    PFIZER: 28.0, PFE: 28.0,
+    JOHNSONJOHNSON: 160.0, JNJ: 160.0,
+    AMERICANEXPRESS: 270.0, AXP: 270.0,
+    CISCO: 55.0, CSCO: 55.0,
+    COCACOLA: 65.0, KO: 65.0,
+    ALIBABA: 95.0, BABA: 95.0,
+    DISNEY: 96.0, DIS: 96.0,
+    VISA: 280.0, V: 280.0
   };
   for (const [k, v] of Object.entries(map)) {
     if (clean.startsWith(k)) return v;
@@ -290,7 +341,7 @@ function generatePairSpecificCandles(pair, count = 120, livePrice = null) {
   };
 
   const targetPrice = (Number.isFinite(livePrice) && livePrice > 0) ? livePrice : getFallbackPriceForPair(pair);
-  const decimals = targetPrice > 500 ? 2 : (targetPrice > 20 ? 3 : 5);
+  const decimals = targetPrice > 500 ? 2 : (targetPrice > 20 ? 2 : (targetPrice > 2 ? 3 : (targetPrice < 0.001 ? 8 : 5)));
   const scale = targetPrice * 0.00042;
   const currentStep = Math.floor(Date.now() / 6000);
   const startStep = currentStep - count;
