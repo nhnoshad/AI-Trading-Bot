@@ -1115,7 +1115,7 @@
     const minMovePips = entryPrice > 1000 ? 0.10 : (entryPrice > 100 ? 0.02 : (entryPrice > 1 ? 0.0001 : (entryPrice > 0.01 ? 0.00005 : entryPrice * 0.001)));
     const priceDiff = Math.abs(closePrice - entryPrice);
     if (priceDiff < minMovePips) {
-      console.log('[AI Bot] evaluateAndRecordCandleOutcome: price move too small (%s) — skipping flat candle', priceDiff.toFixed(6));
+      console.debug(`[AI Bot] evaluateAndRecordCandleOutcome: flat candle move (${priceDiff.toFixed(6)}) below threshold — skipping`);
       return;
     }
 
@@ -1405,6 +1405,16 @@
           </div>
         </div>
 
+        <!-- World-Famous Candlestick Pattern Card -->
+        <div class="ov-pattern-card" id="ov-pattern-card">
+          <div class="ov-pattern-header">
+            <span class="ov-pattern-title">⭐ PATTERN RECOGNIZER</span>
+            <span class="ov-pattern-badge" id="ov-pattern-badge">SCANNING...</span>
+          </div>
+          <div class="ov-pattern-name" id="ov-pattern-name">Normal Price Action</div>
+          <div class="ov-pattern-desc" id="ov-pattern-desc">Monitoring Japanese candlestick patterns...</div>
+        </div>
+
         <!-- Indicator Pills Matching Extension Popup -->
         <div class="ov-indicator-pills" id="ov-indicator-pills"></div>
 
@@ -1543,6 +1553,8 @@
       timeframe: currentTimeframe || '1m',
       candles_analyzed: (lastSignal && lastSignal.candles_analyzed) ? lastSignal.candles_analyzed : 2880,
       indicators: pred ? pred.indicators : null,
+      pattern: pred ? (pred.pattern || pred.detected_pattern) : null,
+      detected_pattern: pred ? (pred.detected_pattern || pred.pattern) : null,
       reasons: pred ? pred.reasons : null,
       stats: candlePredictionStats
     };
@@ -1738,6 +1750,29 @@
       if (candleStateEl) candleStateEl.textContent = cEval.badge;
       if (candleOhlcEl) candleOhlcEl.textContent = `O: ${cEval.open} | H: ${cEval.high} | L: ${cEval.low} | C: ${cEval.close}`;
       if (candlePosEl) candlePosEl.textContent = `Position: ${cEval.position}`;
+    }
+
+    // Update Candlestick Pattern Recognizer Card
+    const patBadgeEl = overlayElement.querySelector('#ov-pattern-badge');
+    const patNameEl = overlayElement.querySelector('#ov-pattern-name');
+    const patDescEl = overlayElement.querySelector('#ov-pattern-desc');
+    const activeObj = isCandleActive ? activeCandlePrediction : (pendingNextCandlePrediction || lastSignal);
+    const pat = activeObj?.pattern || activeObj?.detected_pattern;
+
+    if (patBadgeEl && patNameEl) {
+      if (pat && pat.pattern_name && pat.pattern_name !== 'Normal Price Action') {
+        patNameEl.textContent = pat.pattern_name;
+        const dir = (pat.direction || 'NEUTRAL').toUpperCase();
+        const rel = (pat.reliability || 'MEDIUM').toUpperCase();
+        patBadgeEl.textContent = `${dir === 'BULLISH' ? '🟢' : (dir === 'BEARISH' ? '🔴' : '⚪')} ${dir} (${rel})`;
+        patBadgeEl.className = 'ov-pattern-badge ' + dir.toLowerCase();
+        if (patDescEl) patDescEl.textContent = pat.description || pat.action_advice || '';
+      } else {
+        patNameEl.textContent = 'Normal Price Action';
+        patBadgeEl.textContent = '⚪ NEUTRAL';
+        patBadgeEl.className = 'ov-pattern-badge neutral';
+        if (patDescEl) patDescEl.textContent = 'Consensus driven by 33 technical indicators & 4 ML models.';
+      }
     }
 
     updateOverlayCandleCount();

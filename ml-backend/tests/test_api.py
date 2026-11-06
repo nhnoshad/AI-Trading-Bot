@@ -188,3 +188,53 @@ def test_balanced_multi_pair_buy_sell_wait_predictions():
     assert counts['SELL'] >= 20, f"Expected plenty of SELL signals, got {counts}"
     assert 'BUY' in euraud_signals and 'SELL' in euraud_signals
 
+
+def test_candlestick_pattern_recognizer():
+    from app.services.pattern_recognizer import detect_candlestick_pattern
+
+    # 1. Morning Star (Bullish Reversal)
+    morning_star = [
+        {'open': 1.1050, 'high': 1.1060, 'low': 1.0990, 'close': 1.1000},
+        {'open': 1.0998, 'high': 1.1002, 'low': 1.0985, 'close': 1.0999},
+        {'open': 1.1000, 'high': 1.1050, 'low': 1.0998, 'close': 1.1040}
+    ]
+    p_ms = detect_candlestick_pattern(morning_star)
+    assert p_ms['pattern_name'] == 'Morning Star'
+    assert p_ms['direction'] == 'BULLISH'
+    assert p_ms['reliability'] == 'HIGH'
+
+    # 2. Evening Star (Bearish Reversal)
+    evening_star = [
+        {'open': 1.1000, 'high': 1.1050, 'low': 1.0998, 'close': 1.1045},
+        {'open': 1.1048, 'high': 1.1055, 'low': 1.1042, 'close': 1.1049},
+        {'open': 1.1045, 'high': 1.1048, 'low': 1.0990, 'close': 1.1005}
+    ]
+    p_es = detect_candlestick_pattern(evening_star)
+    assert p_es['pattern_name'] == 'Evening Star'
+    assert p_es['direction'] == 'BEARISH'
+    assert p_es['reliability'] == 'HIGH'
+
+    # 3. Three White Soldiers
+    soldiers = [
+        {'open': 1.1000, 'high': 1.1020, 'low': 1.0995, 'close': 1.1018},
+        {'open': 1.1015, 'high': 1.1035, 'low': 1.1010, 'close': 1.1033},
+        {'open': 1.1030, 'high': 1.1055, 'low': 1.1025, 'close': 1.1052}
+    ]
+    p_tws = detect_candlestick_pattern(soldiers)
+    assert p_tws['pattern_name'] == 'Three White Soldiers'
+    assert p_tws['direction'] == 'BULLISH'
+
+    # 4. Predict endpoint returns detected_pattern
+    candles = make_sample_candles(80)
+    resp = client.post('/api/predict', json={
+        'candles': candles,
+        'timeframe': '1m',
+        'pair': 'Bitcoin (OTC)'
+    })
+    assert resp.status_code == 200
+    pred = resp.json()
+    assert 'pattern' in pred
+    assert 'pattern_name' in pred['pattern']
+    assert 'direction' in pred['pattern']
+
+

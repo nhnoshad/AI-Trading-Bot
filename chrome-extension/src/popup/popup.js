@@ -604,6 +604,29 @@ function renderCandlePredictionState(state) {
     });
   }
 
+  // Pattern Recognizer Card
+  const patBadgeEl = document.getElementById('patternBadge');
+  const patNameEl = document.getElementById('patternName');
+  const patDescEl = document.getElementById('patternDesc');
+  const pat = state.pattern || state.detected_pattern;
+  if (patBadgeEl && patNameEl) {
+    if (pat && pat.pattern_name && pat.pattern_name !== 'Normal Price Action') {
+      patNameEl.textContent = pat.pattern_name;
+      const dir = (pat.direction || 'NEUTRAL').toUpperCase();
+      const rel = (pat.reliability || 'MEDIUM').toUpperCase();
+      patBadgeEl.textContent = `${dir === 'BULLISH' ? '🟢' : (dir === 'BEARISH' ? '🔴' : '⚪')} ${dir} (${rel})`;
+      patBadgeEl.style.background = dir === 'BULLISH' ? 'rgba(0,255,136,0.18)' : (dir === 'BEARISH' ? 'rgba(255,23,68,0.18)' : 'rgba(255,193,7,0.18)');
+      patBadgeEl.style.color = dir === 'BULLISH' ? '#00ff88' : (dir === 'BEARISH' ? '#ff1744' : '#ffc107');
+      if (patDescEl) patDescEl.textContent = pat.description || pat.action_advice || '';
+    } else {
+      patNameEl.textContent = 'Normal Price Action';
+      patBadgeEl.textContent = '⚪ NEUTRAL';
+      patBadgeEl.style.background = 'rgba(255,255,255,0.08)';
+      patBadgeEl.style.color = '#ccc';
+      if (patDescEl) patDescEl.textContent = 'Consensus driven by 33 technical indicators & 4 ML models.';
+    }
+  }
+
   // Reasons box
   if (reasonsBox && Array.isArray(state.reasons)) {
     reasonsBox.innerHTML = state.reasons.slice(0, 3).map(r => `<div>• ${r}</div>`).join('');
@@ -633,6 +656,8 @@ function renderSignal(signal) {
     pair: signal.pair || 'EURUSD',
     timeframe: signal.timeframe || '1m',
     indicators: signal.indicators || null,
+    pattern: signal.pattern || signal.detected_pattern || null,
+    detected_pattern: signal.detected_pattern || signal.pattern || null,
     reasons: signal.reasons || null,
     stats: stats
   };

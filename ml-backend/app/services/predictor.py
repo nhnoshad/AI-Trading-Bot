@@ -10,6 +10,7 @@ from app.services.indicators import (
     calculate_indicators, FEATURE_COLUMNS,
     get_indicator_signals, generate_reasons
 )
+from app.services.pattern_recognizer import detect_candlestick_pattern
 from app.services.adaptive_learner import get_adaptive_learner
 from app.core.config import settings
 import logging
@@ -308,6 +309,34 @@ class TradingPredictor:
             p_up = confidence_raw if prediction == 1 else (1.0 - confidence_raw)
             model_preds = {'xgb': round(p_up, 4), 'lgbm': round(p_up, 4), 'rf': round(p_up, 4)}
 
+        # ── World-Famous Candlestick Pattern Detection ───────────────────────────
+        detected_pattern = detect_candlestick_pattern(candles)
+        pattern_dir = detected_pattern.get('direction', 'NEUTRAL')
+        pattern_rel = detected_pattern.get('reliability', 'LOW')
+
+        # Pattern Synergy with ML / Technical Consensus
+        if pattern_dir == 'BULLISH':
+            if prediction == 1:
+                # Strong synergy: ML and Pattern both bullish!
+                boost = 0.035 if pattern_rel == 'HIGH' else 0.02
+                confidence_raw = min(0.96, confidence_raw + boost)
+            elif prediction == 0:
+                # Divergence warning: ML says SELL but Bullish Reversal pattern formed!
+                penalty = 0.045 if pattern_rel == 'HIGH' else 0.025
+                confidence_raw = max(0.50, confidence_raw - penalty)
+        elif pattern_dir == 'BEARISH':
+            if prediction == 0:
+                # Strong synergy: ML and Pattern both bearish!
+                boost = 0.035 if pattern_rel == 'HIGH' else 0.02
+                confidence_raw = min(0.96, confidence_raw + boost)
+            elif prediction == 1:
+                # Divergence warning: ML says BUY but Bearish Reversal pattern formed!
+                penalty = 0.045 if pattern_rel == 'HIGH' else 0.025
+                confidence_raw = max(0.50, confidence_raw - penalty)
+        elif pattern_dir == 'NEUTRAL' and detected_pattern.get('type') == 'INDECISION':
+            # Market in Doji / Spinning top indecision
+            confidence_raw = min(confidence_raw, 0.65)
+
         confidence_pct = round(confidence_raw * 100, 2)
         threshold = min_confidence_override if min_confidence_override is not None else self.confidence_threshold
 
@@ -332,6 +361,10 @@ class TradingPredictor:
             ]
         else:
             reasons = generate_reasons(indicator_signals, 1 if signal == 'BUY' else 0, confidence_pct)
+
+        if detected_pattern.get('pattern_name') != 'Normal Price Action':
+            pat_text = f"Pattern: {detected_pattern['pattern_name']} ({detected_pattern['direction']} {detected_pattern['type']}) — {detected_pattern['action_advice']}"
+            reasons.insert(0, pat_text)
 
         duration_map = {'30s': 30, '1m': 60, '5m': 300, '15m': 900, '30m': 1800, '1h': 3600}
         recommended_duration = duration_map.get(timeframe, 60)
@@ -377,6 +410,8 @@ class TradingPredictor:
             'entry_price': entry_price,
             'pair': pair,
             'timeframe': timeframe,
+            'pattern': detected_pattern,
+            'detected_pattern': detected_pattern,
             'candles_analyzed': len(candles),
             'history_hours': round((len(candles) * (300 if timeframe == '5m' else 60)) / 3600.0, 1),
             'analysis_ms': analysis_ms,
