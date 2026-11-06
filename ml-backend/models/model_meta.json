@@ -1,6 +1,6 @@
 {
-  "version": "1.0.12",
-  "trained_at": "2026-11-06T10:49:29.622958Z",
+  "version": "1.0.14",
+  "trained_at": "2026-11-06T12:16:27.869029Z",
   "features": [
     "rsi_14",
     "rsi_7",
@@ -36,111 +36,111 @@
     "candle_directionality",
     "bb_squeeze"
   ],
-  "n_samples": 3511,
-  "train_size": 2808,
-  "test_size": 703,
-  "accuracy": 0.5235,
-  "precision": 0.5385,
-  "recall": 0.4861,
-  "f1_score": 0.5109,
+  "n_samples": 3583,
+  "train_size": 2866,
+  "test_size": 717,
+  "accuracy": 0.5272,
+  "precision": 0.541,
+  "recall": 0.4863,
+  "f1_score": 0.5122,
   "confusion_matrix": [
     [
-      193,
-      150
+      200,
+      151
     ],
     [
-      185,
-      175
+      188,
+      178
     ]
   ],
   "sub_models": [
     {
       "model": "XGBoost",
-      "accuracy": "52.9%",
-      "precision": "54.4%",
-      "recall": "50.3%",
-      "f1": "52.2%",
-      "weight": "24%",
+      "accuracy": "53.3%",
+      "precision": "54.5%",
+      "recall": "51.6%",
+      "f1": "53.0%",
+      "weight": "23%",
       "status": "Active"
     },
     {
       "model": "LightGBM",
-      "accuracy": "52.3%",
-      "precision": "53.7%",
-      "recall": "50.0%",
+      "accuracy": "53.3%",
+      "precision": "54.7%",
+      "recall": "49.2%",
       "f1": "51.8%",
-      "weight": "25%",
+      "weight": "23%",
       "status": "Active"
     },
     {
       "model": "CatBoost",
-      "accuracy": "52.1%",
-      "precision": "53.8%",
-      "recall": "45.0%",
-      "f1": "49.0%",
-      "weight": "24%",
+      "accuracy": "53.6%",
+      "precision": "55.2%",
+      "recall": "47.8%",
+      "f1": "51.2%",
+      "weight": "29%",
       "status": "Active"
     },
     {
       "model": "Random Forest",
-      "accuracy": "50.9%",
-      "precision": "52.4%",
-      "recall": "44.7%",
-      "f1": "48.3%",
-      "weight": "25%",
+      "accuracy": "49.5%",
+      "precision": "50.6%",
+      "recall": "44.0%",
+      "f1": "47.1%",
+      "weight": "23%",
       "status": "Active"
     }
   ],
   "feature_importance": [
     {
       "feature": "stoch_k",
-      "importance": 20.27
+      "importance": 19.43
     },
     {
       "feature": "rsi_14",
-      "importance": 11.65
+      "importance": 11.75
     },
     {
       "feature": "williams_r",
-      "importance": 8.62
+      "importance": 8.25
     },
     {
       "feature": "stoch_d",
-      "importance": 6.81
+      "importance": 6.85
     },
     {
       "feature": "bb_position",
-      "importance": 4.95
+      "importance": 5.24
     },
     {
       "feature": "cci",
-      "importance": 4.47
-    },
-    {
-      "feature": "rsi_7",
-      "importance": 3.66
+      "importance": 4.18
     },
     {
       "feature": "macd_hist",
-      "importance": 3.47
+      "importance": 3.86
+    },
+    {
+      "feature": "rsi_7",
+      "importance": 3.57
     },
     {
       "feature": "ema_cross",
-      "importance": 3.1
+      "importance": 3.26
     },
     {
       "feature": "adx",
-      "importance": 2.9
+      "importance": 2.87
+    },
+    {
+      "feature": "candle_body_ratio",
+      "importance": 2.63
     },
     {
       "feature": "sma_50",
-      "importance": 2.67
-    },
-    {
-      "feature": "price_change_5",
-      "importance": 2.55
+      "importance": 2.6
     }
   ],
   "retention_days": 35,
-  "elapsed_sec": 5.0
+  "elapsed_sec": 4.1
 }

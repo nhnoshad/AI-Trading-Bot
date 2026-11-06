@@ -11,6 +11,7 @@ from app.services.indicators import (
     get_indicator_signals, generate_reasons
 )
 from app.services.pattern_recognizer import detect_candlestick_pattern
+from app.services.quotex_engine import analyze_quotex_algorithm_dynamics
 from app.services.adaptive_learner import get_adaptive_learner
 from app.core.config import settings
 import logging
@@ -39,7 +40,7 @@ class TradingPredictor:
         self.rf_model = None
         self.scaler = None
         self.model_version = settings.MODEL_VERSION
-        self.confidence_threshold = 0.62   # Raised from 0.60 — eliminates borderline weak signals
+        self.confidence_threshold = 0.68   # Raised to 0.68 (68%) for Elite Quotex Sniping Filter
         self.last_prediction_time: Optional[str] = None
         self.start_time = time.time()
         self._load_models()
@@ -101,56 +102,68 @@ class TradingPredictor:
         is_hammer = int(row.get('is_hammer', 0))
         is_engulfing = int(row.get('is_engulfing', 0))
 
-        # 1. Extreme Overbought / Oversold Reversal Signals
-        if rsi14 < 30:
-            buy_pts += 2.2
-        elif rsi14 > 70:
-            sell_pts += 2.2
-        elif 52 <= rsi14 <= 68:
-            # Healthy bullish momentum (not overbought)
-            buy_pts += 1.0
-        elif 32 <= rsi14 <= 48:
-            # Healthy bearish momentum (not oversold)
-            sell_pts += 1.0
+        adx = float(row.get('adx', 20))
+        is_trending = adx >= 25
+        is_ranging = adx < 20
 
-        if stoch_k < 20:
-            buy_pts += 1.4
-        elif stoch_k > 80:
-            sell_pts += 1.4
-        elif 55 <= stoch_k <= 78 and rsi14 <= 68:
-            buy_pts += 0.6
-        elif 22 <= stoch_k <= 45 and rsi14 >= 32:
-            sell_pts += 0.6
-
-        if bb_pos < 0.18:
-            buy_pts += 1.5
-        elif bb_pos > 0.82:
-            sell_pts += 1.5
-        elif 0.52 <= bb_pos <= 0.78 and rsi14 <= 68:
-            buy_pts += 0.6
-        elif 0.22 <= bb_pos <= 0.48 and rsi14 >= 32:
-            sell_pts += 0.6
-
-        # 2. Trend & MACD Momentum Signals (when not exhausted)
-        if macd_hist > 0:
-            buy_pts += 1.3
-        elif macd_hist < 0:
-            sell_pts += 1.3
-
-        if ema_cross == 1:
-            buy_pts += 1.2
+        # 1. Overbought / Oversold Signals (ADX Regime Aware)
+        # In a strong trend (ADX >= 25), Stoch > 75 is Bullish Trend Momentum, NOT a sell signal!
+        if is_trending:
+            if stoch_k > 70 and rsi14 >= 50:
+                buy_pts += 1.4   # Strong Bullish Trend Momentum
+            elif stoch_k < 30 and rsi14 <= 50:
+                sell_pts += 1.4  # Strong Bearish Trend Momentum
+        elif is_ranging:
+            if stoch_k < 20:
+                buy_pts += 1.5   # Mean reversion bounce off floor
+            elif stoch_k > 80:
+                sell_pts += 1.5  # Mean reversion rejection off ceiling
         else:
-            sell_pts += 1.2
+            if 55 <= stoch_k <= 78 and rsi14 <= 68:
+                buy_pts += 0.6
+            elif 22 <= stoch_k <= 45 and rsi14 >= 32:
+                sell_pts += 0.6
 
-        # FIX: sma_50 is stored as % deviation from close price (e.g. +0.05 means price is 0.05% above SMA50).
-        # Old threshold 0.005 was always firing (virtually every tick). Corrected to 0.05 (5 basis points).
+        if rsi14 < 30:
+            buy_pts += 2.0
+        elif rsi14 > 70:
+            sell_pts += 2.0
+        elif 52 <= rsi14 <= 68:
+            buy_pts += 0.9
+        elif 32 <= rsi14 <= 48:
+            sell_pts += 0.9
+
+        # Bollinger Band Position
+        if is_ranging:
+            if bb_pos < 0.18:
+                buy_pts += 1.5
+            elif bb_pos > 0.82:
+                sell_pts += 1.5
+        else:
+            if bb_pos > 0.60 and rsi14 >= 52:
+                buy_pts += 1.0  # Riding upper band in trend
+            elif bb_pos < 0.40 and rsi14 <= 48:
+                sell_pts += 1.0  # Riding lower band in trend
+
+        # 2. Trend & MACD Momentum Signals (Require meaningful magnitude, not micro-noise)
+        ema9_rel = float(row.get('ema_9', 0))
+        if ema_cross == 1 and ema9_rel > 0.02:
+            buy_pts += 1.1
+        elif ema_cross == 0 and ema9_rel < -0.02:
+            sell_pts += 1.1
+
+        if abs(macd_hist) > 0.005:
+            if macd_hist > 0:
+                buy_pts += 1.1
+            else:
+                sell_pts += 1.1
+
+        # SMA 50 relative deviation
         if sma50_rel > 0.05:
             buy_pts += 0.7
         elif sma50_rel < -0.05:
             sell_pts += 0.7
 
-        # FIX: price_change_3 is in % (e.g. 0.10 means price moved +0.10% over last 3 candles).
-        # Old threshold 0.01 was always firing. Corrected to 0.10 for meaningful momentum.
         if pc3 > 0.10:
             buy_pts += 0.6
         elif pc3 < -0.10:
@@ -166,26 +179,22 @@ class TradingPredictor:
         elif williams > -20:
             sell_pts += 0.8
 
-        # 3. RSI-7 short-term momentum confirmation (only fires when RSI-7 and RSI-14 agree)
         if rsi7 < 30 and rsi14 < 45:
-            buy_pts += 0.7   # Both short & medium momentum in oversold territory
+            buy_pts += 0.7
         elif rsi7 > 70 and rsi14 > 55:
-            sell_pts += 0.7  # Both short & medium momentum in overbought territory
+            sell_pts += 0.7
 
-        # 4. Candlestick pattern bonuses (high-reliability reversal signals from raw OHLC)
         if is_hammer == 1:
-            buy_pts += 0.8  # Hammer = strong bullish reversal pattern
+            buy_pts += 0.8
         if is_engulfing == 1:
-            # Engulfing candle follows the EMA trend direction
             if ema_cross == 1:
-                buy_pts += 0.7   # Bullish engulfing in bullish trend
+                buy_pts += 0.7
             else:
-                sell_pts += 0.7  # Bearish engulfing in bearish trend
+                sell_pts += 0.7
 
         total = buy_pts + sell_pts + 1e-9
         diff = abs(buy_pts - sell_pts)
-        # FIX: Reduced indecision threshold 0.95 -> 0.80 to avoid over-waiting in decisive conditions
-        if diff < 0.80:
+        if diff < 1.0:
             # Market is flat/indecisive -> WAIT
             return -1, 0.52
 
@@ -289,21 +298,19 @@ class TradingPredictor:
                     prediction = -1
                     confidence_raw = 0.54
             else:
-                # ML model and short-term indicators disagree: pick stronger or WAIT if close
-                # Widened disagreement gap from 0.08 → 0.10 (more conservative)
-                if abs(ml_conf - rule_conf) < 0.10:
-                    prediction = -1
-                    confidence_raw = 0.55
-                elif ml_conf > rule_conf:
+                # ML model and short-term indicators disagree on direction
+                # In binary trading, trading into direct indicator/ML conflict is low win-rate
+                # Strict Sniper: Only trade if at least 3 ML models agree AND ml_conf >= 0.74 AND not choppy
+                votes_for_ml = votes_buy if ml_dir == 1 else votes_sell
+                if votes_for_ml >= 3 and ml_conf >= 0.74 and not adx_choppy:
                     prediction = ml_dir
-                    confidence_raw = max(0.61, ml_conf * 0.88)
+                    confidence_raw = ml_conf * 0.90
                 else:
-                    prediction = rule_dir
-                    confidence_raw = max(0.61, rule_conf * 0.88)
-                # In choppy market + disagreement → always WAIT
-                if adx_choppy:
                     prediction = -1
                     confidence_raw = 0.54
+                if adx_choppy:
+                    prediction = -1
+                    confidence_raw = 0.52
         else:
             prediction, confidence_raw = rule_dir, rule_conf
             p_up = confidence_raw if prediction == 1 else (1.0 - confidence_raw)
@@ -317,25 +324,52 @@ class TradingPredictor:
         # Pattern Synergy with ML / Technical Consensus
         if pattern_dir == 'BULLISH':
             if prediction == 1:
-                # Strong synergy: ML and Pattern both bullish!
                 boost = 0.035 if pattern_rel == 'HIGH' else 0.02
                 confidence_raw = min(0.96, confidence_raw + boost)
             elif prediction == 0:
-                # Divergence warning: ML says SELL but Bullish Reversal pattern formed!
-                penalty = 0.045 if pattern_rel == 'HIGH' else 0.025
+                penalty = 0.05 if pattern_rel == 'HIGH' else 0.03
                 confidence_raw = max(0.50, confidence_raw - penalty)
         elif pattern_dir == 'BEARISH':
             if prediction == 0:
-                # Strong synergy: ML and Pattern both bearish!
                 boost = 0.035 if pattern_rel == 'HIGH' else 0.02
                 confidence_raw = min(0.96, confidence_raw + boost)
             elif prediction == 1:
-                # Divergence warning: ML says BUY but Bearish Reversal pattern formed!
-                penalty = 0.045 if pattern_rel == 'HIGH' else 0.025
+                penalty = 0.05 if pattern_rel == 'HIGH' else 0.03
                 confidence_raw = max(0.50, confidence_raw - penalty)
         elif pattern_dir == 'NEUTRAL' and detected_pattern.get('type') == 'INDECISION':
-            # Market in Doji / Spinning top indecision
-            confidence_raw = min(confidence_raw, 0.65)
+            confidence_raw = min(confidence_raw, 0.62)
+
+        # ── Quotex Algorithmic Dynamics Integration ──────────────────────────────
+        quotex_dyn = analyze_quotex_algorithm_dynamics(candles)
+        q_bias = quotex_dyn.get('quotex_bias', 'WAIT')
+        q_regime = quotex_dyn.get('regime', 'RANGING')
+        q_exhaustion = quotex_dyn.get('exhaustion_risk', False)
+        q_adj = quotex_dyn.get('confidence_adjustment', 0.0)
+
+        # 1. Anti-Exhaustion Guard (Prevent buying tops / selling bottoms on Quotex 3-to-5 bar traps)
+        if q_exhaustion:
+            if prediction == 1 and q_bias == 'SELL':
+                # Block buying at the top of exhausted green candle run!
+                prediction = -1
+                confidence_raw = 0.52
+            elif prediction == 0 and q_bias == 'BUY':
+                # Block selling at the bottom of exhausted red candle run!
+                prediction = -1
+                confidence_raw = 0.52
+            elif pattern_dir == q_bias and pattern_rel == 'HIGH':
+                # Reversal pattern confirms mean-reversion counter-trade!
+                prediction = 1 if q_bias == 'BUY' else 0
+                confidence_raw = min(0.92, confidence_raw + 0.04)
+
+        # 2. Quotex Trend & Mean-Reversion Synergy
+        if not q_exhaustion:
+            if (prediction == 1 and q_bias == 'BUY') or (prediction == 0 and q_bias == 'SELL'):
+                confidence_raw = min(0.96, confidence_raw + q_adj)
+            elif (prediction == 1 and q_bias == 'SELL') or (prediction == 0 and q_bias == 'BUY'):
+                confidence_raw = max(0.50, confidence_raw - 0.07)
+            elif q_regime == 'CHOPPY_SIDEWAYS':
+                confidence_raw = min(confidence_raw, 0.58)
+                prediction = -1
 
         confidence_pct = round(confidence_raw * 100, 2)
         threshold = min_confidence_override if min_confidence_override is not None else self.confidence_threshold
@@ -356,8 +390,8 @@ class TradingPredictor:
         indicator_signals = get_indicator_signals(latest_row)
         if signal == 'WAIT':
             reasons = [
-                f"Market consolidating on {pair} (Confidence {confidence_pct}% below threshold)",
-                "Mixed momentum between RSI and Moving Averages — waiting for clear breakout"
+                f"Market consolidating on {pair} (Confidence {confidence_pct}% below sniper threshold {int(threshold*100)}%)",
+                f"Quotex Regime: {q_regime} — sniper filter waiting for high-probability A+ setup"
             ]
         else:
             reasons = generate_reasons(indicator_signals, 1 if signal == 'BUY' else 0, confidence_pct)
@@ -365,6 +399,10 @@ class TradingPredictor:
         if detected_pattern.get('pattern_name') != 'Normal Price Action':
             pat_text = f"Pattern: {detected_pattern['pattern_name']} ({detected_pattern['direction']} {detected_pattern['type']}) — {detected_pattern['action_advice']}"
             reasons.insert(0, pat_text)
+
+        if quotex_dyn.get('reasons'):
+            for qr in quotex_dyn['reasons']:
+                reasons.insert(0, f"Quotex Engine: {qr}")
 
         duration_map = {'30s': 30, '1m': 60, '5m': 300, '15m': 900, '30m': 1800, '1h': 3600}
         recommended_duration = duration_map.get(timeframe, 60)
@@ -412,6 +450,7 @@ class TradingPredictor:
             'timeframe': timeframe,
             'pattern': detected_pattern,
             'detected_pattern': detected_pattern,
+            'quotex_dynamics': quotex_dyn,
             'candles_analyzed': len(candles),
             'history_hours': round((len(candles) * (300 if timeframe == '5m' else 60)) / 3600.0, 1),
             'analysis_ms': analysis_ms,

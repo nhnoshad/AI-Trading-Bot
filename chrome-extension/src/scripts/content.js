@@ -104,7 +104,7 @@
   // ── State & Configuration ──────────────────────────────────────────────────
   let botSettings = {
     tradeDuration: 60,
-    minConfidence: 60,
+    minConfidence: 68,
     soundEnabled: true,
     serverUrl: 'http://localhost:8000'
   };
@@ -967,7 +967,7 @@
         candles,
         timeframe: currentTimeframe || '1m',
         pair: currentPair,
-        min_confidence: botSettings.minConfidence || 60
+        min_confidence: botSettings.minConfidence || 68
       };
 
       safeSendMessage({ type: 'FETCH_SIGNAL', payload }, (result) => {
@@ -1058,46 +1058,46 @@
       return;
     }
     const entryPrice = pred.entry_price;
+    const targetPair = pred.pair || currentPair;
 
     // ── 1. Resolve the true close price of the completed candle ──────────────
-    // Priority order:
-    //   a) Last completed candle from pairCandleBuffers (real WS history candle)
-    //   b) pairTickCandle's recorded close  (aggregated from WS ticks during the minute)
-    //   c) Hint passed by caller             (may be first tick of the new candle — least reliable)
-    //   d) entryPrice as last resort         (we mark SKIPPED so it doesn't pollute training)
+    // Strictly isolate by the prediction's specific pair to prevent cross-asset tab bleed
     let closePrice = null;
     let sourceLabel = 'unknown';
 
-    // a) Most recent completed candle in the buffer (should be the candle that just closed)
-    const candleBuf = pairCandleBuffers[currentPair] || pairCandleBuffers[pred.pair] || [];
-    if (candleBuf.length >= 1) {
+    // a) Most recent completed candle in targetPair's buffer
+    const candleBuf = (typeof getCandleBufferForPair === 'function')
+      ? getCandleBufferForPair(targetPair)
+      : (pairCandleBuffers[targetPair] || []);
+
+    if (candleBuf && candleBuf.length >= 1) {
       const latestBufCandle = candleBuf[candleBuf.length - 1];
       const bufTs = Number(latestBufCandle.timestamp instanceof Date
         ? latestBufCandle.timestamp.getTime()
         : new Date(latestBufCandle.timestamp).getTime());
-      // Accept buffer candle only if its timestamp belongs to completedBucket window
-      if (Math.abs(bufTs - completedBucket) < 70000) {
+      if (Math.abs(bufTs - completedBucket) < 75000) {
         closePrice = Number(latestBufCandle.close);
-        sourceLabel = 'candle_buffer';
+        sourceLabel = 'pair_candle_buffer';
       }
     }
 
-    // b) pairTickCandle aggregated close (running candle that resets every minute)
+    // b) pairTickCandle aggregated close for targetPair ONLY
     if (!Number.isFinite(closePrice) || closePrice <= 0) {
-      const tc = pairTickCandles[currentPair] || pairTickCandles[pred.pair];
+      const tc = (typeof getTickCandleForPair === 'function')
+        ? getTickCandleForPair(targetPair)
+        : pairTickCandles[targetPair];
       if (tc && Number.isFinite(tc.close) && tc.close > 0) {
-        // Only trust if the tick candle belongs to completedBucket
         const tcBucket = Math.floor(tc.bucket / 60000) * 60000;
         if (tcBucket === completedBucket) {
           closePrice = tc.close;
-          sourceLabel = 'tick_candle';
+          sourceLabel = 'pair_tick_candle';
         }
       }
     }
 
-    // c) Hint from caller (first tick of new candle — use as last-resort)
+    // c) Hint from caller — ONLY accept if it belongs to currentPair AND currentPair matches targetPair
     if (!Number.isFinite(closePrice) || closePrice <= 0) {
-      if (Number.isFinite(_exitPriceHint) && _exitPriceHint > 0) {
+      if (currentPair === targetPair && Number.isFinite(_exitPriceHint) && _exitPriceHint > 0) {
         closePrice = _exitPriceHint;
         sourceLabel = 'caller_hint';
       }
@@ -1105,13 +1105,19 @@
 
     // d) Cannot determine — skip this evaluation to avoid corrupting learning
     if (!Number.isFinite(closePrice) || closePrice <= 0) {
-      console.log('[AI Bot] evaluateAndRecordCandleOutcome: could not resolve exit price — skipping');
+      console.debug('[AI Bot] evaluateAndRecordCandleOutcome: could not resolve exit price for', targetPair, '— skipping');
       return;
     }
 
-    // Require a meaningful price movement (> 0.5 pip) to avoid false WIN
-    // when entry === close due to price stale / same-tick conditions
-    // Adaptive price movement floor across all asset classes (Crypto, Commodities, Stocks, Currencies)
+    // e) Sanity check: Reject cross-asset contaminated prices from rapid tab switching
+    // (e.g. Toncoin 1.59 evaluated with BNB 353 price)
+    const maxPlausibleJump = (entryPrice > 1000) ? 0.12 : (entryPrice > 10 ? 0.08 : 0.04);
+    if (Math.abs(closePrice - entryPrice) / entryPrice > maxPlausibleJump) {
+      console.debug(`[AI Bot] evaluateAndRecordCandleOutcome: rejected impossible price jump ${entryPrice} -> ${closePrice} on ${targetPair} (cross-asset tab switch)`);
+      return;
+    }
+
+    // Require a meaningful price movement (> minMovePips) to avoid false WIN on flat candles
     const minMovePips = entryPrice > 1000 ? 0.10 : (entryPrice > 100 ? 0.02 : (entryPrice > 1 ? 0.0001 : (entryPrice > 0.01 ? 0.00005 : entryPrice * 0.001)));
     const priceDiff = Math.abs(closePrice - entryPrice);
     if (priceDiff < minMovePips) {

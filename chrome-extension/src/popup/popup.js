@@ -411,7 +411,7 @@ async function saveSettings() {
 function getSettings() {
   return {
     tradeDuration: parseInt(document.getElementById('tradeDuration')?.value, 10) || 60,
-    minConfidence: parseInt(document.getElementById('minConfidence')?.value, 10) || 60,
+    minConfidence: parseInt(document.getElementById('minConfidence')?.value, 10) || 68,
     serverUrl: document.getElementById('serverUrl')?.value.trim() || 'http://localhost:8000'
   };
 }

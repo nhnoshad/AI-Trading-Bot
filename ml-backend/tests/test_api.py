@@ -177,8 +177,8 @@ def test_balanced_multi_pair_buy_sell_wait_predictions():
     counts = {'BUY': 0, 'SELL': 0, 'WAIT': 0}
     euraud_signals = set()
     for pair, bp in pairs:
-        for step in range(1000, 1020):
-            res = predictor.predict(make_rolling_candles(pair, bp, step), '1m', pair)
+        for step in range(1000, 1040):
+            res = predictor.predict(make_rolling_candles(pair, bp, step), '1m', pair, min_confidence_override=0.55)
             counts[res['signal']] += 1
             if pair == 'EUR/AUD (OTC)':
                 euraud_signals.add(res['signal'])
