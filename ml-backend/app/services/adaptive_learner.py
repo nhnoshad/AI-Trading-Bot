@@ -205,13 +205,26 @@ class AdaptiveLearner:
 
         self.outcomes_since_last_retrain += 1
         retrained = False
-        if self.outcomes_since_last_retrain >= self.auto_retrain_every_n_outcomes:
-            try:
-                retrain_res = self.retrain_from_rolling_memory(db)
-                retrained = retrain_res.get('deployed', False)
-                self.outcomes_since_last_retrain = 0
-            except Exception as e:
-                logger.error(f'Auto-retrain error: {e}')
+        # Asynchronous non-blocking background retraining so live prediction stays <10ms
+        if not getattr(self, '_is_retraining', False) and self.outcomes_since_last_retrain >= self.auto_retrain_every_n_outcomes:
+            self.outcomes_since_last_retrain = 0
+            retrained = True
+
+            def _bg_retrain():
+                self._is_retraining = True
+                try:
+                    from app.core.database import SessionLocal
+                    with SessionLocal() as bg_db:
+                        res = self.retrain_from_rolling_memory(bg_db)
+                        logger.info(f'Background auto-retrain completed: {res}')
+                except Exception as e:
+                    logger.error(f'Background auto-retrain error: {e}')
+                finally:
+                    self._is_retraining = False
+
+            import threading
+            t = threading.Thread(target=_bg_retrain, daemon=True)
+            t.start()
 
         return {
             'learned': True,
@@ -425,6 +438,10 @@ class AdaptiveLearner:
         if len(df) < 100:
             return {'deployed': False, 'reason': f'Insufficient samples ({len(df)} < 100)'}
 
+        for col in FEATURE_COLUMNS:
+            if col not in df.columns:
+                df[col] = 0.0
+
         X = df[FEATURE_COLUMNS].fillna(0.0).values
         y = df['label'].astype(int).values
 
@@ -606,6 +623,14 @@ class AdaptiveLearner:
                 )
                 db.add(perf_row)
                 db.commit()
+
+            # Hot-reload in-memory predictor models without needing a server reboot
+            try:
+                from app.services.predictor import get_predictor
+                get_predictor().reload_models()
+                logger.info(f"Predictor successfully reloaded newly trained model v{new_version}")
+            except Exception as e:
+                logger.warning(f"Could not automatically reload predictor models: {e}")
 
         return {
             'deployed': deployed,

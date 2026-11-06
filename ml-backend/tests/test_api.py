@@ -41,10 +41,10 @@ def make_sample_candles(n: int = 80):
     return candles
 
 
-def test_28_indicators_calculation():
+def test_indicators_calculation():
     candles = make_sample_candles(80)
     df = calculate_indicators(candles)
-    assert len(FEATURE_COLUMNS) == 28
+    assert len(FEATURE_COLUMNS) == 33
     for col in FEATURE_COLUMNS:
         assert col in df.columns, f'Missing indicator column: {col}'
 

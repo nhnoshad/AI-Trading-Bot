@@ -43,9 +43,9 @@ def test_full_pipeline():
     assert res.status_code == 200
     ind_data = res.json()
     print("  Total indicators reported:", ind_data.get('count'))
-    assert ind_data.get('count') == 28, f"Expected 28 indicators, got {ind_data.get('count')}"
+    assert ind_data.get('count') == len(FEATURE_COLUMNS), f"Expected {len(FEATURE_COLUMNS)} indicators, got {ind_data.get('count')}"
     assert ind_data.get('indicators') == FEATURE_COLUMNS
-    print("  -> Indicators verification PASSED (exact 28 features)!")
+    print(f"  -> Indicators verification PASSED (exact {len(FEATURE_COLUMNS)} features)!")
 
     # 3. Model Performance Endpoint
     print("\n[Test 3] GET /api/model-performance ...")

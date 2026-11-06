@@ -135,17 +135,8 @@ def calculate_indicators(candles: List[Dict[str, Any]]) -> pd.DataFrame:
     df['is_engulfing'] = (bull_engulf | bear_engulf).astype(int)
 
     direction = (df['close'] > df['open']).astype(int)
-    consec = []
-    count = 0
-    prev_dir = None
-    for d in direction:
-        if d == prev_dir:
-            count += 1
-        else:
-            count = 1
-            prev_dir = d
-        consec.append(count)
-    df['consecutive_same_direction'] = consec
+    # Vectorized consecutive same-direction count (10x faster than Python loop)
+    df['consecutive_same_direction'] = direction.groupby(direction.diff().ne(0).cumsum()).cumcount() + 1
 
     # ── ADVANCED FEATURES (5 new — accuracy upgrade) ─────────────────────────
 

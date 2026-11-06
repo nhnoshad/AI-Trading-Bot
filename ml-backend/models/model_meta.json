@@ -1,6 +1,6 @@
 {
-  "version": "1.0.0",
-  "trained_at": "2026-11-04T18:31:43.973772",
+  "version": "1.0.4",
+  "trained_at": "2026-11-04T19:36:07.267689Z",
   "features": [
     "rsi_14",
     "rsi_7",
@@ -36,8 +36,111 @@
     "candle_directionality",
     "bb_squeeze"
   ],
-  "n_samples": 11042,
-  "train_size": 8833,
-  "test_size": 2209,
-  "accuracy": 0.5323675871435039
+  "n_samples": 11108,
+  "train_size": 8886,
+  "test_size": 2222,
+  "accuracy": 0.5275,
+  "precision": 0.5868,
+  "recall": 0.5408,
+  "f1_score": 0.5629,
+  "confusion_matrix": [
+    [
+      496,
+      476
+    ],
+    [
+      574,
+      676
+    ]
+  ],
+  "sub_models": [
+    {
+      "model": "XGBoost",
+      "accuracy": "50.4%",
+      "precision": "56.4%",
+      "recall": "51.8%",
+      "f1": "54.0%",
+      "weight": "26%",
+      "status": "Active"
+    },
+    {
+      "model": "LightGBM",
+      "accuracy": "51.7%",
+      "precision": "57.6%",
+      "recall": "53.2%",
+      "f1": "55.3%",
+      "weight": "27%",
+      "status": "Active"
+    },
+    {
+      "model": "CatBoost",
+      "accuracy": "53.4%",
+      "precision": "58.8%",
+      "recall": "57.4%",
+      "f1": "58.1%",
+      "weight": "27%",
+      "status": "Active"
+    },
+    {
+      "model": "Random Forest",
+      "accuracy": "51.1%",
+      "precision": "57.5%",
+      "recall": "50.1%",
+      "f1": "53.5%",
+      "weight": "17%",
+      "status": "Active"
+    }
+  ],
+  "feature_importance": [
+    {
+      "feature": "rsi_14",
+      "importance": 11.42
+    },
+    {
+      "feature": "rsi_7",
+      "importance": 6.39
+    },
+    {
+      "feature": "bb_width",
+      "importance": 6.06
+    },
+    {
+      "feature": "atr_14",
+      "importance": 5.86
+    },
+    {
+      "feature": "cci",
+      "importance": 5.25
+    },
+    {
+      "feature": "stoch_k",
+      "importance": 4.98
+    },
+    {
+      "feature": "macd_signal",
+      "importance": 4.9
+    },
+    {
+      "feature": "stoch_d",
+      "importance": 4.66
+    },
+    {
+      "feature": "williams_r",
+      "importance": 4.34
+    },
+    {
+      "feature": "adx",
+      "importance": 3.78
+    },
+    {
+      "feature": "bb_position",
+      "importance": 3.76
+    },
+    {
+      "feature": "lower_wick",
+      "importance": 3.65
+    }
+  ],
+  "retention_days": 35,
+  "elapsed_sec": 5.29
 }
