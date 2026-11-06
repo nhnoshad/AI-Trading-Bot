@@ -293,6 +293,14 @@
     'ADAUSD': 'Cardano', 'CARDANO': 'Cardano',
     'DOGEUSD': 'Dogecoin', 'DOGECOIN': 'Dogecoin',
     'SHIBUSD': 'Shiba Inu', 'SHIBAINU': 'Shiba Inu',
+    'ATOMUSD': 'Cosmos', 'ATOM/USD': 'Cosmos', 'COSMOS': 'Cosmos', 'ATOM': 'Cosmos',
+    'MATICUSD': 'Polygon', 'MATIC/USD': 'Polygon', 'POL/USD': 'Polygon', 'POLYGON': 'Polygon', 'MATIC': 'Polygon',
+    'LINKUSD': 'Chainlink', 'LINK/USD': 'Chainlink', 'CHAINLINK': 'Chainlink', 'LINK': 'Chainlink',
+    'UNIUSD': 'Uniswap', 'UNI/USD': 'Uniswap', 'UNISWAP': 'Uniswap', 'UNI': 'Uniswap',
+    'XMRUSD': 'Monero', 'XMR/USD': 'Monero', 'MONERO': 'Monero', 'XMR': 'Monero',
+    'XLMUSD': 'Stellar', 'XLM/USD': 'Stellar', 'STELLAR': 'Stellar', 'XLM': 'Stellar',
+    'NEARUSD': 'Near', 'NEAR/USD': 'Near', 'NEAR': 'Near',
+    'PEPEUSD': 'Pepe', 'PEPE': 'Pepe',
 
     // Commodities
     'XAUUSD': 'Gold', 'XAU/USD': 'Gold', 'GOLD': 'Gold',
@@ -325,6 +333,15 @@
     'V': 'Visa', 'VISA': 'Visa'
   };
 
+  const FIAT_CURRENCIES = new Set([
+    'EUR', 'USD', 'GBP', 'JPY', 'AUD', 'CAD', 'CHF', 'NZD',
+    'BRL', 'INR', 'BDT', 'TRY', 'EGP', 'ZAR', 'MXN', 'SGD',
+    'HKD', 'NOK', 'SEK', 'RUB', 'CNH', 'CNY', 'DZD', 'PKR',
+    'AED', 'IDR', 'PHP', 'VND', 'MYR', 'THB', 'KRW', 'ILS',
+    'SAR', 'QAR', 'KWD', 'BHD', 'OMR', 'JOD', 'COP', 'CLP',
+    'ARS', 'PEN'
+  ]);
+
   function normalizePairName(raw) {
     if (!raw) return currentPair;
     let s = String(raw).trim();
@@ -346,11 +363,16 @@
     }
 
     // 6-letter currency pair (e.g. EURUSD -> EUR/USD)
+    // ONLY split into c1/c2 if BOTH 3-letter parts are genuine fiat currency codes!
+    // This prevents 6-letter single assets (Cosmos, Monero, Google, etc.) from being corrupted into COS/MOS!
     const compact = core.toUpperCase().replace(/[^A-Z]/g, '');
-    const nonCurrencyExclusions = ['BITCOI', 'ETHERE', 'LITECO', 'SOLANA', 'RIPPLE', 'BOEING', 'AMAZON', 'DISNEY', 'PFIZER', 'CARDAN'];
-    if (compact.length === 6 && !nonCurrencyExclusions.some(k => compact.startsWith(k))) {
-      core = `${compact.slice(0, 3)}/${compact.slice(3, 6)}`;
-      return isOtc ? `${core} (OTC)` : core;
+    if (compact.length === 6) {
+      const c1 = compact.slice(0, 3);
+      const c2 = compact.slice(3, 6);
+      if (FIAT_CURRENCIES.has(c1) && FIAT_CURRENCIES.has(c2)) {
+        core = `${c1}/${c2}`;
+        return isOtc ? `${core} (OTC)` : core;
+      }
     }
 
     // Format multi-word assets cleanly (title case words, preserve special chars)
@@ -491,7 +513,7 @@
 
   // ── 3. Smart Pair, Price & Chart Canvas Scanner for market-qx.info ─────────
   // Matches all Currencies, Crypto, Commodities, Stocks and their OTC variants on Quotex
-  const PAIR_REGEX = /([A-Z]{3}\s*[\/\-_]\s*[A-Z]{3}(?:\s*\(OTC\))?|[A-Za-z0-9\.\&\'\s]{2,30}?\s*(?:\(OTC\)|_OTC|\bOTC\b)|Bitcoin|Ethereum|Avalanche|Litecoin|Trump|Solana|Ethereum\s*Classic|Ripple|Toncoin|Dash|Polkadot|Binance\s*Coin|Zcash|Cardano|Dogecoin|Shiba\s*Inu|Gold|Silver|UKBrent|USCrude|Platinum|Palladium|Natural\s*Gas|Crude\s*Oil|Apple|Boeing|Microsoft|Tesla|Intel|Amazon|Meta|Facebook|Google|Alphabet|Netflix|Nvidia|McDonald\'?s|Pfizer|Johnson\s*&\s*Johnson|American\s*Express|Cisco|Coca-Cola|Alibaba|Disney|Visa)/i;
+  const PAIR_REGEX = /([A-Z]{3}\s*[\/\-_]\s*[A-Z]{3}(?:\s*\(OTC\))?|[A-Za-z0-9\.\&\'\s]{2,30}?\s*(?:\(OTC\)|_OTC|\bOTC\b)|Bitcoin|Ethereum|Avalanche|Litecoin|Trump|Solana|Ethereum\s*Classic|Ripple|Toncoin|Dash|Polkadot|Binance\s*Coin|Zcash|Cardano|Dogecoin|Shiba\s*Inu|Cosmos|Polygon|Chainlink|Uniswap|Monero|Stellar|Near|Pepe|MATIC|ATOM|LINK|UNI|XMR|XLM|Gold|Silver|UKBrent|USCrude|Platinum|Palladium|Natural\s*Gas|Crude\s*Oil|Apple|Boeing|Microsoft|Tesla|Intel|Amazon|Meta|Facebook|Google|Alphabet|Netflix|Nvidia|McDonald\'?s|Pfizer|Johnson\s*&\s*Johnson|American\s*Express|Cisco|Coca-Cola|Alibaba|Disney|Visa)/i;
 
   function detectActivePairFromPage() {
     const activeTabSelectors = [
@@ -1117,11 +1139,11 @@
       return;
     }
 
-    // Require a meaningful price movement (> minMovePips) to avoid false WIN on flat candles
-    const minMovePips = entryPrice > 1000 ? 0.10 : (entryPrice > 100 ? 0.02 : (entryPrice > 1 ? 0.0001 : (entryPrice > 0.01 ? 0.00005 : entryPrice * 0.001)));
+    // In binary options, any price movement > 0 (even 0.1 pip) determines WIN or LOSS.
+    // If the price is exact flat tie (diff <= 1e-8), skip outcome recording.
     const priceDiff = Math.abs(closePrice - entryPrice);
-    if (priceDiff < minMovePips) {
-      console.debug(`[AI Bot] evaluateAndRecordCandleOutcome: flat candle move (${priceDiff.toFixed(6)}) below threshold — skipping`);
+    if (priceDiff <= 1e-8) {
+      console.debug(`[AI Bot] evaluateAndRecordCandleOutcome: exact tie/flat candle (diff=${priceDiff}) on ${targetPair} — skipping`);
       return;
     }
 
@@ -1236,9 +1258,16 @@
         const completedPrediction = activeCandlePrediction;
 
         // 2. Lock in the prediction for this newly started candle FIRST
-        if (pendingNextCandlePrediction && pendingNextCandlePrediction.pair === currentPair) {
+        const pairMatches = pendingNextCandlePrediction && (
+          pendingNextCandlePrediction.pair === currentPair ||
+          getCorePairKey(pendingNextCandlePrediction.pair) === getCorePairKey(currentPair) ||
+          normalizePairName(pendingNextCandlePrediction.pair) === normalizePairName(currentPair)
+        );
+
+        if (pendingNextCandlePrediction && pairMatches) {
           activeCandlePrediction = {
             ...pendingNextCandlePrediction,
+            pair: currentPair, // Maintain canonical pair name for UI & learning
             candleMinuteStr: currentMinStr,
             candleStartBucket: currentMinuteBucket,
             candleStartTime: now,
@@ -1275,7 +1304,7 @@
         // 3. Evaluate completed candle outcome with 1.5s delay so the tick buffer
         //    has time to push the last tick of the completed candle into pairCandleBuffers
         //    before we read it in evaluateAndRecordCandleOutcome().
-        if (completedPrediction && completedPrediction.candleStartBucket === justCompletedBucket) {
+        if (completedPrediction && (completedPrediction.candleStartBucket === justCompletedBucket || Math.abs(completedPrediction.candleStartBucket - justCompletedBucket) <= 70000)) {
           const predSnapshot = completedPrediction; // freeze reference
           const hintAtBoundary = exitPHint;
           setTimeout(() => {
