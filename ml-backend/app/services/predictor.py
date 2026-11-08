@@ -343,8 +343,11 @@ class TradingPredictor:
         quotex_dyn = analyze_quotex_algorithm_dynamics(candles)
         q_bias = quotex_dyn.get('quotex_bias', 'WAIT')
         q_regime = quotex_dyn.get('regime', 'RANGING')
+        q_memory = quotex_dyn.get('market_memory', 'RANDOM_WALK_NOISE')
         q_exhaustion = quotex_dyn.get('exhaustion_risk', False)
         q_adj = quotex_dyn.get('confidence_adjustment', 0.0)
+        vsa_info = quotex_dyn.get('vsa', {})
+        vsa_bias = vsa_info.get('bias', 'NEUTRAL')
 
         # 1. Anti-Exhaustion Guard (Prevent buying tops / selling bottoms on Quotex 3-to-5 bar traps)
         if q_exhaustion:
@@ -359,15 +362,19 @@ class TradingPredictor:
             elif pattern_dir == q_bias and pattern_rel == 'HIGH':
                 # Reversal pattern confirms mean-reversion counter-trade!
                 prediction = 1 if q_bias == 'BUY' else 0
-                confidence_raw = min(0.92, confidence_raw + 0.04)
+                confidence_raw = min(0.94, confidence_raw + 0.05)
 
-        # 2. Quotex Trend & Mean-Reversion Synergy
+        # 2. Quotex Algorithmic Trend, VSA & Fractal Hurst Synergy
         if not q_exhaustion:
             if (prediction == 1 and q_bias == 'BUY') or (prediction == 0 and q_bias == 'SELL'):
                 confidence_raw = min(0.96, confidence_raw + q_adj)
+                # Extra boost if VSA confirms smart money absorption or effort expansion
+                if vsa_bias == q_bias:
+                    confidence_raw = min(0.97, confidence_raw + 0.03)
             elif (prediction == 1 and q_bias == 'SELL') or (prediction == 0 and q_bias == 'BUY'):
-                confidence_raw = max(0.50, confidence_raw - 0.07)
-            elif q_regime == 'CHOPPY_SIDEWAYS':
+                confidence_raw = max(0.48, confidence_raw - 0.08)
+            elif q_regime == 'CHOPPY_SIDEWAYS' or (q_memory == 'RANDOM_WALK_NOISE' and confidence_raw < 0.74):
+                # Filter out pure noise trades on Quotex
                 confidence_raw = min(confidence_raw, 0.58)
                 prediction = -1
 
