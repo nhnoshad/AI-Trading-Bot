@@ -1,7 +1,7 @@
 // AI Trading Bot - Popup Controller (Auto-Scans https://market-qx.info/en/demo-trade on Open)
 
 let currentMode = 'MANUAL';
-let botRunning = true;
+let botRunning = false;
 let stats = { trades: 0, wins: 0, losses: 0, pnl: 0, streak: 0, streakDir: 'W' };
 let currentCandleState = null;
 
@@ -396,7 +396,7 @@ async function loadSettings() {
       document.getElementById('minConfidenceVal').textContent = data.minConfidence + '%';
     }
     if (data.serverUrl) document.getElementById('serverUrl').value = data.serverUrl;
-    botRunning = data.botRunning !== undefined ? data.botRunning : true;
+    botRunning = data.botRunning !== undefined ? Boolean(data.botRunning) : false;
     updateBotStatusUI();
     if (data.lastSignal) renderSignal(data.lastSignal);
   });

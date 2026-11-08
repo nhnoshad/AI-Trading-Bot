@@ -109,7 +109,7 @@
     serverUrl: 'http://localhost:8000'
   };
 
-  let isRunning = true;
+  let isRunning = false;
   let analysisTimer = null;
   let countdownTimer = null;
   let pairWatcherTimer = null;
@@ -2071,14 +2071,20 @@
     return true;
   });
 
-  // Auto-initialize settings on start
+  // Auto-initialize settings on load
+  // By default, initially it is STOPPED until user explicitly clicks START!
   safeStorageGet(
     ['botRunning', 'tradeAmount', 'tradeDuration', 'minConfidence', 'serverUrl', 'mode', 'soundEnabled'],
     (data) => {
-      startBot({
-        ...data,
-        botRunning: true
-      });
+      botSettings = { ...botSettings, ...data };
+      const shouldRun = Boolean(data && data.botRunning === true);
+      if (shouldRun) {
+        startBot(data);
+      } else {
+        stopBot();
+        createOverlay();
+        updateOverlayRunningState(false);
+      }
     }
   );
 })();
