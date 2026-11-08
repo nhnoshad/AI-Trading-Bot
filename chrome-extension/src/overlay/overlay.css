@@ -17,8 +17,41 @@
   color: #e0e0e0;
   box-shadow: 0 8px 32px rgba(0,0,0,0.75);
   user-select: none;
-  transition: border-color 0.3s, box-shadow 0.3s;
+  transition: border-color 0.3s, box-shadow 0.3s, transform 0.3s ease, opacity 0.3s ease;
   overflow: hidden;
+}
+
+/* Smooth downward slide animation when closing / collapsing */
+#ai-trading-overlay.slide-down-closing {
+  animation: slideDownClose 0.32s cubic-bezier(0.25, 1, 0.5, 1) forwards !important;
+  pointer-events: none;
+}
+
+/* Smooth upward slide animation when expanding */
+#ai-trading-overlay.slide-up-opening {
+  animation: slideUpOpen 0.32s cubic-bezier(0.25, 1, 0.5, 1) forwards !important;
+}
+
+@keyframes slideDownClose {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(45px) scale(0.92);
+    opacity: 0;
+  }
+}
+
+@keyframes slideUpOpen {
+  0% {
+    transform: translateY(45px) scale(0.92);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
 }
 
 #ai-trading-overlay.dragging {
@@ -352,12 +385,31 @@
 }
 
 .ov-notice {
-  font-size: 10px;
+  font-size: 10.5px;
   color: #ffc107;
-  background: rgba(255,193,7,0.12);
-  padding: 4px 8px;
-  border-radius: 4px;
+  background: rgba(255, 193, 7, 0.15);
+  border: 1px solid rgba(255, 193, 7, 0.35);
+  padding: 5px 8px;
+  border-radius: 6px;
   text-align: center;
+  transition: transform 0.35s ease, opacity 0.35s ease;
+  animation: noticeSlideIn 0.3s ease;
+}
+
+.ov-notice.slide-down-out {
+  transform: translateY(18px);
+  opacity: 0;
+}
+
+@keyframes noticeSlideIn {
+  from {
+    transform: translateY(-8px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 .ov-learning-card {

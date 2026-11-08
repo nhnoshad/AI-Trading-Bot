@@ -1412,10 +1412,11 @@
           <button type="button" class="ov-sound-btn" id="ov-scan-btn" title="Scan Active Pair Now">🔄</button>
           <button type="button" class="ov-sound-btn" id="ov-sound-btn" title="Toggle Sound Alert">${botSettings.soundEnabled !== false ? '🔊' : '🔇'}</button>
           <button type="button" class="ov-min-btn" id="ov-min-btn" title="Minimize/Maximize">_</button>
-          <button type="button" class="ov-close-btn" id="ov-close-btn" title="Collapse to Floating Icon">✕</button>
+          <button type="button" class="ov-close-btn" id="ov-close-btn" title="Close Downward (Collapse)">✕</button>
         </div>
       </div>
       <div class="ov-body">
+        <!-- 1. Prediction & 2. Duration -->
         <div class="ov-prediction-card">
           <div class="ov-section-label" id="ov-section-label">NEXT CANDLE PREDICTION</div>
           <div class="ov-signal" id="ov-signal">🔍 SCANNING...</div>
@@ -1423,42 +1424,19 @@
           <div class="ov-expiry-badge" id="ov-expiry-badge">⏱️ DURATION: 1 MINUTE (60s)</div>
         </div>
 
+        <!-- 3. Which Pair & 4. Live Price -->
         <div class="ov-pair-row">
           <span class="ov-pair" id="ov-pair">${currentPair || 'EUR/USD (OTC)'}</span>
           <span class="ov-price-badge" id="ov-price-badge">--</span>
         </div>
 
-        <div class="ov-candle-card" id="ov-candle-card">
-          <div class="ov-candle-top">
-            <span class="ov-candle-state" id="ov-candle-state">⏳ Analyzing candle...</span>
-            <span class="ov-candle-timer" id="ov-candle-timer">--s left</span>
-          </div>
-          <div class="ov-candle-ohlc" id="ov-candle-ohlc">O: -- | H: -- | L: -- | C: --</div>
-          <div class="ov-candle-pos" id="ov-candle-pos">Position: Scanning current candle...</div>
-          <div class="ov-candle-remaining" id="ov-candle-remaining" style="font-size:11px; font-weight:800; color:#00d4ff; margin-top:3px; text-align:center;">
-            ⏳ 60s remaining until candle completion
-          </div>
-        </div>
-
-        <!-- World-Famous Candlestick Pattern Card -->
-        <div class="ov-pattern-card" id="ov-pattern-card">
-          <div class="ov-pattern-header">
-            <span class="ov-pattern-title">⭐ PATTERN RECOGNIZER</span>
-            <span class="ov-pattern-badge" id="ov-pattern-badge">SCANNING...</span>
-          </div>
-          <div class="ov-pattern-name" id="ov-pattern-name">Normal Price Action</div>
-          <div class="ov-pattern-desc" id="ov-pattern-desc">Monitoring Japanese candlestick patterns...</div>
-        </div>
-
-        <!-- Indicator Pills Matching Extension Popup -->
-        <div class="ov-indicator-pills" id="ov-indicator-pills"></div>
-
-        <!-- Instant Actions Matching Extension Popup -->
+        <!-- 5. Rescan & 6. Stop Controls -->
         <div class="ov-actions">
           <button type="button" class="ov-scan-big-btn" id="ov-scan-now-btn">🔍 SCAN SELECTED PAIR NOW</button>
           <button type="button" class="ov-bot-toggle-btn ${isRunning ? 'btn-stop' : 'btn-start'}" id="ov-toggle-bot-btn">${isRunning ? '⏹ STOP AI BOT' : '▶ START AI BOT'}</button>
         </div>
 
+        <!-- 7. AI Candle Prediction & Learning -->
         <div class="ov-learning-card" id="ov-learning-card">
           <div class="ov-learning-header">
             <span class="ov-learning-title">🧠 AI Candle Prediction & Learning</span>
@@ -1479,25 +1457,11 @@
             </div>
           </div>
           <div class="ov-learn-note" id="ov-learn-note">
-            Continuous 5s observation • Auto-learning from outcomes
+            Continuous adaptive learning active • Model weights adapt from every candle outcome
           </div>
         </div>
 
-        <div class="ov-conf-row">
-          <span>AI Confidence</span>
-          <div class="ov-conf-bar"><div class="ov-conf-fill" id="ov-conf-fill"></div></div>
-          <span id="ov-conf-val">--</span>
-        </div>
-
-        <div class="ov-meta-row">
-          <span id="ov-countdown">Next scan: 5s</span>
-          <span id="ov-latency">AI: --ms</span>
-        </div>
-
-        <div class="ov-reasons" id="ov-reasons"></div>
         <div class="ov-notice" id="ov-notice" style="display:none"></div>
-
-        <div class="ov-candle-count" id="ov-candle-count">Active Pair: ${currentPair || 'None'}</div>
       </div>
     `;
     document.body.appendChild(overlayElement);
@@ -1539,8 +1503,7 @@
 
     overlayElement.querySelector('#ov-close-btn')?.addEventListener('click', (e) => {
       e.stopPropagation();
-      overlayElement.classList.add('collapsed-fab');
-      clampOverlayToViewport(overlayElement, overlayElement.offsetLeft, overlayElement.offsetTop);
+      closeOverlayDownward(overlayElement);
     });
 
     overlayElement.querySelector('#ov-sound-btn')?.addEventListener('click', (e) => {
@@ -1868,13 +1831,46 @@
     if (el) el.textContent = `Analysis: 2 Days (${cCount} bars, ${hCount}) | ${currentPair || 'EUR/USD'}`;
   }
 
+  let noticeHideTimer = null;
+
+  function closeOverlayDownward(el) {
+    if (!el || el.classList.contains('collapsed-fab')) return;
+    el.classList.add('slide-down-closing');
+    setTimeout(() => {
+      el.classList.remove('slide-down-closing');
+      el.classList.add('collapsed-fab');
+      clampOverlayToViewport(el, el.offsetLeft, el.offsetTop);
+    }, 300);
+  }
+
+  function expandOverlayUpward(el) {
+    if (!el) return;
+    el.classList.remove('collapsed-fab');
+    el.classList.add('slide-up-opening');
+    setTimeout(() => {
+      el.classList.remove('slide-up-opening');
+    }, 300);
+    clampOverlayToViewport(el, el.offsetLeft, el.offsetTop);
+  }
+
   function showOverlayNotice(msg) {
     if (!overlayElement) return;
     const el = overlayElement.querySelector('#ov-notice');
     if (el) {
+      if (noticeHideTimer) {
+        clearTimeout(noticeHideTimer);
+        noticeHideTimer = null;
+      }
       el.textContent = msg;
+      el.classList.remove('slide-down-out');
       el.style.display = 'block';
-      setTimeout(() => { el.style.display = 'none'; }, 4000);
+      noticeHideTimer = setTimeout(() => {
+        el.classList.add('slide-down-out');
+        setTimeout(() => {
+          el.style.display = 'none';
+          el.classList.remove('slide-down-out');
+        }, 350);
+      }, 4000);
     }
   }
 
@@ -1928,10 +1924,9 @@
       activePointerId = null;
       safeStorageSet({ overlayPosition: { x: el.offsetLeft, y: el.offsetTop } });
 
-      // If user tapped/clicked the collapsed pill without dragging: expand!
+      // If user tapped/clicked the collapsed pill without dragging: smoothly expand upward!
       if (dragDistance < 8 && el.classList.contains('collapsed-fab')) {
-        el.classList.remove('collapsed-fab');
-        clampOverlayToViewport(el, el.offsetLeft, el.offsetTop);
+        expandOverlayUpward(el);
       }
       if (e) e.stopPropagation();
     }
@@ -1944,8 +1939,7 @@
       fabPill.addEventListener('click', (e) => {
         e.stopPropagation();
         e.preventDefault();
-        el.classList.remove('collapsed-fab');
-        clampOverlayToViewport(el, el.offsetLeft, el.offsetTop);
+        expandOverlayUpward(el);
       });
     }
 

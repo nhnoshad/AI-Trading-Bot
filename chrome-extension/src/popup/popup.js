@@ -524,8 +524,7 @@ function renderCandlePredictionState(state) {
 
   if (pairEl) {
     const pTxt = state.entry_price ? ` @ ${Number(state.entry_price).toFixed(4)}` : '';
-    const cCount = (state.candles_analyzed) ? state.candles_analyzed : 2880;
-    pairEl.textContent = `${state.pair}${pTxt} | 1m (2-Day Analysis: ${cCount.toLocaleString()} candles)`;
+    pairEl.textContent = `${state.pair}${pTxt}`;
   }
 
   if (scanBtn) {
