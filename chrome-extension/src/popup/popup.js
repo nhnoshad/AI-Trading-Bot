@@ -390,12 +390,18 @@ async function loadSettings() {
   safeStorageGet([
     'tradeDuration', 'minConfidence', 'serverUrl', 'botRunning', 'lastSignal'
   ], (data) => {
-    if (data.tradeDuration) document.getElementById('tradeDuration').value = data.tradeDuration;
-    if (data.minConfidence) {
-      document.getElementById('minConfidence').value = data.minConfidence;
-      document.getElementById('minConfidenceVal').textContent = data.minConfidence + '%';
-    }
-    if (data.serverUrl) document.getElementById('serverUrl').value = data.serverUrl;
+    const tradeDurationEl = document.getElementById('tradeDuration');
+    if (tradeDurationEl && data.tradeDuration) tradeDurationEl.value = data.tradeDuration;
+
+    const minConfidenceEl = document.getElementById('minConfidence');
+    if (minConfidenceEl && data.minConfidence) minConfidenceEl.value = data.minConfidence;
+
+    const minConfidenceValEl = document.getElementById('minConfidenceVal');
+    if (minConfidenceValEl && data.minConfidence) minConfidenceValEl.textContent = data.minConfidence + '%';
+
+    const serverUrlEl = document.getElementById('serverUrl');
+    if (serverUrlEl && data.serverUrl) serverUrlEl.value = data.serverUrl;
+
     botRunning = data.botRunning !== undefined ? Boolean(data.botRunning) : false;
     updateBotStatusUI();
     if (data.lastSignal) renderSignal(data.lastSignal);
@@ -412,7 +418,7 @@ function getSettings() {
   return {
     tradeDuration: parseInt(document.getElementById('tradeDuration')?.value, 10) || 60,
     minConfidence: parseInt(document.getElementById('minConfidence')?.value, 10) || 68,
-    serverUrl: document.getElementById('serverUrl')?.value.trim() || 'http://localhost:8000'
+    serverUrl: document.getElementById('serverUrl')?.value?.trim() || 'http://localhost:8000'
   };
 }
 
@@ -701,7 +707,7 @@ function updateBotStatusUI() {
 }
 
 async function testConnection() {
-  const url = document.getElementById('serverUrl')?.value.trim() || 'http://localhost:8000';
+  const url = document.getElementById('serverUrl')?.value?.trim() || 'http://localhost:8000';
   const connDot = document.getElementById('connDot');
   const connStatus = document.getElementById('connStatus');
   try {
@@ -720,7 +726,7 @@ async function testConnection() {
 }
 
 async function exportSignalsToCSV() {
-  const url = document.getElementById('serverUrl')?.value.trim() || 'http://localhost:8000';
+  const url = document.getElementById('serverUrl')?.value?.trim() || 'http://localhost:8000';
   let signals = [];
   try {
     const resp = await fetch(url + '/api/signals?limit=50');
