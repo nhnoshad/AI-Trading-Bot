@@ -262,17 +262,30 @@ class TradingPredictor:
             ml_dir = int(np.argmax(ml_proba))
             ml_conf = float(ml_proba[ml_dir])
 
-            # ── Vote majority check: at least 2 of 4 sub-models must agree ──────────
-            # This prevents a single high-confidence outlier from overruling consensus.
+            # ── Epistemic Uncertainty & Model Disagreement Variance Gate ────────────
+            # Computes variance and standard deviation across all 4 sub-models:
+            # Low variance (std <= 0.05) = Strong unanimous consensus across all tree architectures.
+            # High variance (std > 0.08) or 2 vs 2 split = Epistemic ambiguity (dangerous coin-flip noise).
+            ensemble_std = 0.0
             if model_preds:
+                prob_vals = list(model_preds.values())
+                ensemble_std = float(np.std(prob_vals))
                 votes_buy = sum(1 for v in model_preds.values() if v > 0.50)
                 votes_sell = sum(1 for v in model_preds.values() if v <= 0.50)
                 n_models = len(model_preds)
+
+                is_deadlock = (votes_buy == 2 and votes_sell == 2)
                 majority_agrees = (ml_dir == 1 and votes_buy >= max(2, n_models // 2)) or \
                                   (ml_dir == 0 and votes_sell >= max(2, n_models // 2))
-                if not majority_agrees:
-                    # Minority direction — push toward WAIT
+
+                if is_deadlock or ensemble_std > 0.085:
+                    # Model disagreement: push toward WAIT to avoid coin flips
+                    ml_conf = min(ml_conf, 0.58)
+                elif not majority_agrees:
                     ml_conf = min(ml_conf, 0.61)
+                elif ensemble_std <= 0.045:
+                    # Unanimous consensus bonus
+                    ml_conf = min(0.96, ml_conf + 0.035)
 
             # ── ADX-aware trend gate ──────────────────────────────────────────────────
             adx_val = float(latest_row.get('adx', 0))
@@ -474,21 +487,29 @@ class TradingPredictor:
             c_achieved = f"Current candle indecisive (Doji/Flat) at {entry_price:.5f}"
 
         # Next candle prediction details
+        scale = 0.0001 if entry_price < 5 else (0.1 if entry_price > 1000 else 0.01)
         if signal == 'BUY':
             next_action = "BUY (CALL UP)"
             next_summary = f"Next {timeframe} candle predicted to go UP for {recommended_duration}s"
+            ideal_entry = round(entry_price - 0.6 * scale, 5 if entry_price < 5 else 2)
+            sniper_entry_advice = f"Sniper CALL: Target micro-pullback to ~{ideal_entry} in :02s-:10s for peak win-margin"
         elif signal == 'SELL':
             next_action = "SELL (PUT DOWN)"
             next_summary = f"Next {timeframe} candle predicted to go DOWN for {recommended_duration}s"
+            ideal_entry = round(entry_price + 0.6 * scale, 5 if entry_price < 5 else 2)
+            sniper_entry_advice = f"Sniper PUT: Target micro-bounce to ~{ideal_entry} in :02s-:10s for peak win-margin"
         else:
             next_action = "WAIT (CHOP)"
             next_summary = f"Next {timeframe} candle direction uncertain — wait for breakout"
+            sniper_entry_advice = "Market in consolidation — Await confirmed breakout before entering"
 
         duration_text = f"{recommended_duration // 60} min ({recommended_duration}s)" if recommended_duration >= 60 else f"{recommended_duration}s"
 
         analysis_ms = round((time.perf_counter() - t0) * 1000, 2)
         now_iso = datetime.utcnow().isoformat() + 'Z'
         self.last_prediction_time = now_iso
+
+        uncertainty_level = 'LOW' if ensemble_std <= 0.05 else ('MEDIUM' if ensemble_std <= 0.08 else 'HIGH')
 
         return {
             'signal': signal,
@@ -497,8 +518,14 @@ class TradingPredictor:
             'entry_price': entry_price,
             'pair': pair,
             'timeframe': timeframe,
-            'dynamic_gate_threshold': round(dynamic_threshold * 100, 1),
+            'dynamic_gate_threshold': round(adaptive_threshold * 100, 1),
             'next_candle_summary': next_summary,
+            'sniper_entry_advice': sniper_entry_advice,
+            'epistemic_uncertainty': {
+                'ensemble_std': round(float(ensemble_std), 4),
+                'uncertainty_level': uncertainty_level,
+                'unanimous_consensus': bool(ensemble_std <= 0.05)
+            },
             'pattern': detected_pattern,
             'detected_pattern': detected_pattern,
             'quotex_dynamics': quotex_dyn,

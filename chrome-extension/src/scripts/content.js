@@ -1064,6 +1064,9 @@
           targetMinuteBucket: nextMinBucket,
           targetMinuteStr: nextMinStr,
           indicators: lastSignal.indicators,
+          pattern: lastSignal.pattern || lastSignal.detected_pattern,
+          sniper_entry_advice: lastSignal.sniper_entry_advice,
+          epistemic_uncertainty: lastSignal.epistemic_uncertainty,
           reasons: lastSignal.reasons
         };
 
@@ -1337,6 +1340,9 @@
             timeframe: currentTimeframe || '1m',
             recommended_duration: 60,
             indicators: lastSignal.indicators,
+            pattern: lastSignal.pattern || lastSignal.detected_pattern,
+            sniper_entry_advice: lastSignal.sniper_entry_advice,
+            epistemic_uncertainty: lastSignal.epistemic_uncertainty,
             reasons: lastSignal.reasons,
             isLocked: true
           };
@@ -1597,6 +1603,7 @@
       indicators: pred ? pred.indicators : null,
       pattern: pred ? (pred.pattern || pred.detected_pattern) : null,
       detected_pattern: pred ? (pred.detected_pattern || pred.pattern) : null,
+      sniper_entry_advice: pred ? pred.sniper_entry_advice : null,
       reasons: pred ? pred.reasons : null,
       stats: candlePredictionStats
     };

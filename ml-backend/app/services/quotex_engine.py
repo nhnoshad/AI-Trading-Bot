@@ -181,6 +181,95 @@ def calculate_fractal_hurst(prices: np.ndarray, period: int = 24) -> Tuple[float
     return hurst_val, regime
 
 
+def detect_fft_dominant_cycle(prices: np.ndarray, n_bars: int = 64) -> Dict[str, Any]:
+    """
+    Fast Fourier Transform (FFT) Spectral Periodicity Engine.
+    De-anonymizes Quotex OTC algorithmic synthetic cycle waves:
+    - Extracts dominant cyclical wave period (T in bars)
+    - Computes spectral purity / SNR (Signal-to-Noise Ratio)
+    - Determines harmonic cycle phase:
+      * Phase ~ +pi/2 (Crest): Cycle top -> Reversal PUT / SELL
+      * Phase ~ -pi/2 (Trough): Cycle bottom -> Reversal CALL / BUY
+      * Low purity (< 0.20): Stochastic noise -> RANGING / WAIT
+    """
+    default_fft = {
+        'has_cycle': False,
+        'dominant_period': 0.0,
+        'spectral_purity': 0.0,
+        'cycle_phase': 'CHAOTIC_NOISE',
+        'bias': 'NEUTRAL',
+        'cycle_score': 0.0,
+        'reasons': []
+    }
+    if prices is None or len(prices) < 24:
+        return default_fft
+
+    p = prices[-min(len(prices), n_bars):].astype(float)
+    N = len(p)
+    if N < 20:
+        return default_fft
+
+    try:
+        # 1. Detrend signal using linear regression
+        x = np.arange(N)
+        poly = np.polyfit(x, p, 1)
+        detrended = p - np.polyval(poly, x)
+
+        # 2. Windowing to prevent spectral leakage
+        window = np.hanning(N)
+        windowed = detrended * window
+
+        # 3. Real FFT
+        fft_vals = np.fft.rfft(windowed)
+        freqs = np.fft.rfftfreq(N, d=1.0)
+        power = np.abs(fft_vals) ** 2
+
+        # Ignore DC component (freq == 0) and ultra-high frequency 1-2 bar noise
+        valid_idx = np.where((freqs >= 1.0 / 35.0) & (freqs <= 1.0 / 4.0))[0]
+        if len(valid_idx) == 0:
+            return default_fft
+
+        tot_power = np.sum(power[1:]) + 1e-9
+        peak_sub_idx = np.argmax(power[valid_idx])
+        dom_idx = valid_idx[peak_sub_idx]
+        peak_power = power[dom_idx]
+        dom_freq = freqs[dom_idx]
+        dom_period = 1.0 / (dom_freq + 1e-9)
+
+        spectral_purity = float(peak_power / tot_power)
+        phase = float(np.angle(fft_vals[dom_idx]))
+
+        reasons = []
+        has_cycle = spectral_purity >= 0.22 and (4.0 <= dom_period <= 35.0)
+        bias = 'NEUTRAL'
+        cycle_phase = 'RANDOM_WALK'
+
+        if has_cycle:
+            if 0.85 <= phase <= 2.35:
+                cycle_phase = 'CYCLE_CREST'
+                bias = 'SELL'
+                reasons.append(f"FFT Spectral Wave: Cycle Crest reached (Period {dom_period:.1f}m, Purity {spectral_purity*100:.0f}%) — Cyclical PUT setup")
+            elif -2.35 <= phase <= -0.85:
+                cycle_phase = 'CYCLE_TROUGH'
+                bias = 'BUY'
+                reasons.append(f"FFT Spectral Wave: Cycle Trough reached (Period {dom_period:.1f}m, Purity {spectral_purity*100:.0f}%) — Cyclical CALL setup")
+            else:
+                cycle_phase = 'CYCLE_MID_EXPANSION'
+                bias = 'NEUTRAL'
+
+        return {
+            'has_cycle': bool(has_cycle),
+            'dominant_period': round(float(dom_period), 1),
+            'spectral_purity': round(float(spectral_purity), 3),
+            'cycle_phase': cycle_phase,
+            'bias': bias,
+            'cycle_score': round(float(spectral_purity * 100), 1),
+            'reasons': reasons
+        }
+    except Exception:
+        return default_fft
+
+
 def analyze_volume_spread_absorption(df: pd.DataFrame) -> Dict[str, Any]:
     """
     Reverse-engineers Quotex institutional & broker order absorption:
@@ -393,7 +482,10 @@ def analyze_quotex_algorithm_dynamics(candles: List[Dict[str, Any]], micro_ticks
     # 2. Fractal Hurst Exponent (Market Memory)
     hurst_val, market_memory = calculate_fractal_hurst(df['close'].values)
 
-    # 3. Volume-Spread Absorption
+    # 3. FFT Dominant Cycle Detection (Quotex Synthetic Periodicity)
+    fft_info = detect_fft_dominant_cycle(df['close'].values)
+
+    # 4. Volume-Spread Absorption
     vsa_info = analyze_volume_spread_absorption(df)
 
     # 4. Micro-Gap Analysis
@@ -538,6 +630,15 @@ def analyze_quotex_algorithm_dynamics(candles: List[Dict[str, Any]], micro_ticks
             confidence_adj += 0.04
             reasons.append(f"Quotex O-U extreme oversold (z={ou_z:.2f}) + Bullish defense")
 
+    # 10. FFT Dominant Cycle Wave Confluence
+    if fft_info.get('has_cycle'):
+        if fft_info.get('bias') == quotex_bias and quotex_bias in ('BUY', 'SELL'):
+            confidence_adj += 0.045
+            reasons.extend(fft_info.get('reasons', []))
+        elif fft_info.get('bias') != 'NEUTRAL' and quotex_bias in ('BUY', 'SELL') and fft_info.get('bias') != quotex_bias:
+            confidence_adj -= 0.06
+            reasons.append(f"FFT Wave Conflict: Signal fights dominant {fft_info['cycle_phase']} ({fft_info['dominant_period']}m cycle)")
+
     # 11. Micro-Second Velocity Lock
     micro_vel = analyze_micro_second_velocity(micro_ticks, quotex_bias)
     if micro_vel.get('reasons'):
@@ -556,6 +657,7 @@ def analyze_quotex_algorithm_dynamics(candles: List[Dict[str, Any]], micro_ticks
         'consecutive_bars': int(consec),
         'wick_rejection': str(wick_rejection),
         'mtf': mtf_info,
+        'fft': fft_info,
         'vsa': vsa_info,
         'micro_gap': gap_info,
         'micro_velocity': micro_vel,

@@ -85,6 +85,42 @@ def detect_candlestick_pattern(candles: List[Dict[str, Any]]) -> Dict[str, Any]:
         elif mid_close < p_close * 0.9995:
             prior_trend = 'DOWN'
 
+    # ── 0. INSTITUTIONAL LIQUIDITY SWEEP & STOP-HUNT (Smart Money Concepts) ──
+    if len(candles) >= 15:
+        prev_lows = [float(c.get('low', 0)) for c in candles[-21:-1] if float(c.get('low', 0)) > 0]
+        prev_highs = [float(c.get('high', 0)) for c in candles[-21:-1] if float(c.get('high', 0)) > 0]
+        if prev_lows and prev_highs:
+            lowest_prev = min(prev_lows)
+            highest_prev = max(prev_highs)
+
+            # Bullish Liquidity Sweep: Price pierced below lowest support, but rejected with massive lower wick
+            if m0['low'] < lowest_prev and m0['close'] >= lowest_prev and (m0['lower'] / m0['range']) >= 0.50:
+                return {
+                    'pattern_name': 'Bullish Liquidity Sweep (Stop Hunt)',
+                    'direction': 'BULLISH',
+                    'signal': 'BUY',
+                    'reliability': 'VERY HIGH',
+                    'score': 96,
+                    'type': 'LIQUIDITY_REVERSAL',
+                    'candles_involved': 1,
+                    'description': 'Institutional Stop Hunt: Market swept retail stop-losses below local support and rejected violently with a massive lower shadow.',
+                    'action_advice': 'Ultra-High-Probability CALL (UP) reversal on smart money accumulation.'
+                }
+
+            # Bearish Liquidity Sweep: Price pierced above highest resistance, but rejected with massive upper wick
+            if m0['high'] > highest_prev and m0['close'] <= highest_prev and (m0['upper'] / m0['range']) >= 0.50:
+                return {
+                    'pattern_name': 'Bearish Liquidity Sweep (Stop Hunt)',
+                    'direction': 'BEARISH',
+                    'signal': 'SELL',
+                    'reliability': 'VERY HIGH',
+                    'score': 96,
+                    'type': 'LIQUIDITY_REVERSAL',
+                    'candles_involved': 1,
+                    'description': 'Institutional Stop Hunt: Market swept breakout buyers above local resistance and rejected violently with a massive upper shadow.',
+                    'action_advice': 'Ultra-High-Probability PUT (DOWN) reversal on smart money distribution.'
+                }
+
     # ── 1. THREE-CANDLE PATTERNS (Highest Probability) ──────────────────────
 
     # A) MORNING STAR (Bullish Reversal)
