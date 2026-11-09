@@ -207,7 +207,8 @@ class TradingPredictor:
         candles: List[Dict],
         timeframe: str = '1m',
         pair: str = 'EUR/USD',
-        min_confidence_override: Optional[float] = None
+        min_confidence_override: Optional[float] = None,
+        micro_ticks: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Analyzes the selected pair's candle data using all 28 technical indicators
@@ -340,7 +341,7 @@ class TradingPredictor:
             confidence_raw = min(confidence_raw, 0.62)
 
         # ── Quotex Algorithmic Dynamics Integration ──────────────────────────────
-        quotex_dyn = analyze_quotex_algorithm_dynamics(candles)
+        quotex_dyn = analyze_quotex_algorithm_dynamics(candles, micro_ticks=micro_ticks)
         q_bias = quotex_dyn.get('quotex_bias', 'WAIT')
         q_regime = quotex_dyn.get('regime', 'RANGING')
         q_memory = quotex_dyn.get('market_memory', 'RANDOM_WALK_NOISE')
@@ -348,6 +349,9 @@ class TradingPredictor:
         q_adj = quotex_dyn.get('confidence_adjustment', 0.0)
         vsa_info = quotex_dyn.get('vsa', {})
         vsa_bias = vsa_info.get('bias', 'NEUTRAL')
+        mtf_info = quotex_dyn.get('mtf', {})
+        mtf_trend = mtf_info.get('mtf_trend', 'NEUTRAL')
+        micro_vel = quotex_dyn.get('micro_velocity', {})
 
         # 1. Anti-Exhaustion Guard (Prevent buying tops / selling bottoms on Quotex 3-to-5 bar traps)
         if q_exhaustion:
@@ -364,13 +368,30 @@ class TradingPredictor:
                 prediction = 1 if q_bias == 'BUY' else 0
                 confidence_raw = min(0.94, confidence_raw + 0.05)
 
-        # 2. Quotex Algorithmic Trend, VSA & Fractal Hurst Synergy
+        # 2. Multi-Timeframe Confluence (5M Macro Trend vs 1M Trigger)
         if not q_exhaustion:
+            if prediction == 1:
+                if mtf_trend == 'BULLISH':
+                    confidence_raw = min(0.98, confidence_raw + 0.04)
+                elif mtf_trend == 'BEARISH':
+                    # 1m BUY directly into 5m Bearish macro trend -> High loss probability
+                    confidence_raw = max(0.50, confidence_raw - 0.10)
+                    prediction = -1
+            elif prediction == 0:
+                if mtf_trend == 'BEARISH':
+                    confidence_raw = min(0.98, confidence_raw + 0.04)
+                elif mtf_trend == 'BULLISH':
+                    # 1m SELL directly into 5m Bullish macro trend -> High loss probability
+                    confidence_raw = max(0.50, confidence_raw - 0.10)
+                    prediction = -1
+
+        # 3. Quotex Algorithmic Trend, VSA & Fractal Hurst Synergy
+        if not q_exhaustion and prediction != -1:
             if (prediction == 1 and q_bias == 'BUY') or (prediction == 0 and q_bias == 'SELL'):
                 confidence_raw = min(0.96, confidence_raw + q_adj)
                 # Extra boost if VSA confirms smart money absorption or effort expansion
                 if vsa_bias == q_bias:
-                    confidence_raw = min(0.97, confidence_raw + 0.03)
+                    confidence_raw = min(0.98, confidence_raw + 0.03)
             elif (prediction == 1 and q_bias == 'SELL') or (prediction == 0 and q_bias == 'BUY'):
                 confidence_raw = max(0.48, confidence_raw - 0.08)
             elif q_regime == 'CHOPPY_SIDEWAYS' or (q_memory == 'RANDOM_WALK_NOISE' and confidence_raw < 0.74):
@@ -378,8 +399,26 @@ class TradingPredictor:
                 confidence_raw = min(confidence_raw, 0.58)
                 prediction = -1
 
+        # 4. Micro-Second Velocity Lock (:57-second confirmation)
+        if micro_vel.get('last_second_trap', False):
+            prediction = -1
+            confidence_raw = 0.50
+
+        # 5. Dynamic Volatility-Adaptive Confidence Gate
+        base_threshold = min_confidence_override if min_confidence_override is not None else self.confidence_threshold
+        if q_regime == 'CHOPPY_SIDEWAYS' or q_memory == 'RANDOM_WALK_NOISE':
+            # In choppy noise, demand at least 78% certainty
+            adaptive_threshold = max(0.78, base_threshold + 0.08)
+        elif (prediction == 1 and mtf_trend == 'BULLISH') or (prediction == 0 and mtf_trend == 'BEARISH'):
+            # In confirmed multi-timeframe trend, allow 68%+
+            adaptive_threshold = max(0.68, base_threshold - 0.02)
+        elif q_exhaustion:
+            adaptive_threshold = max(0.72, base_threshold)
+        else:
+            adaptive_threshold = base_threshold
+
         confidence_pct = round(confidence_raw * 100, 2)
-        threshold = min_confidence_override if min_confidence_override is not None else self.confidence_threshold
+        threshold = adaptive_threshold
 
         if prediction == -1 or confidence_raw < threshold:
             signal = 'WAIT'

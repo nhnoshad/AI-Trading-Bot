@@ -387,6 +387,8 @@
     return isOtc ? `${formatted} (OTC)` : formatted;
   }
 
+  const pairRecentTicks = {};
+
   function recordLivePairPrice(pair, price, decimals = null) {
     const p = parseFloat(price);
     if (!Number.isFinite(p) || p <= 0) return;
@@ -401,6 +403,47 @@
     if (norm === currentPair || core === getCorePairKey(currentPair)) {
       currentPrice = p;
     }
+
+    // Keep rolling 40-tick window for micro-second velocity lock
+    if (!pairRecentTicks[norm]) pairRecentTicks[norm] = [];
+    const tBuf = pairRecentTicks[norm];
+    tBuf.push({ price: p, ts: Date.now() });
+    if (tBuf.length > 40) tBuf.shift();
+  }
+
+  function getRecentTickMetrics(pair) {
+    const norm = normalizePairName(pair);
+    const tBuf = pairRecentTicks[norm];
+    if (!tBuf || tBuf.length < 4) {
+      return { velocity: 0.0, acceleration: 0.0, direction: 'FLAT', is_decelerating: false };
+    }
+    const now = Date.now();
+    const recent = tBuf.filter(t => (now - t.ts) <= 10000);
+    if (recent.length < 3) {
+      return { velocity: 0.0, acceleration: 0.0, direction: 'FLAT', is_decelerating: false };
+    }
+    const first = recent[0];
+    const last = recent[recent.length - 1];
+    const dt = Math.max(0.5, (last.ts - first.ts) / 1000);
+    const dp = last.price - first.price;
+    const scale = first.price > 1000 ? 0.1 : (first.price > 100 ? 0.02 : 0.0001);
+    const vel = (dp / scale) / dt;
+
+    const midIdx = Math.floor(recent.length / 2);
+    const midTick = recent[midIdx];
+    const dt1 = Math.max(0.2, (midTick.ts - first.ts) / 1000);
+    const dt2 = Math.max(0.2, (last.ts - midTick.ts) / 1000);
+    const vel1 = ((midTick.price - first.price) / scale) / dt1;
+    const vel2 = ((last.price - midTick.price) / scale) / dt2;
+    const accel = vel2 - vel1;
+    const is_decel = Math.abs(vel2) < (0.45 * Math.abs(vel1)) && Math.abs(vel1) > 0.8;
+
+    return {
+      velocity: Math.round(vel * 100) / 100,
+      acceleration: Math.round(accel * 100) / 100,
+      direction: vel > 0.3 ? 'UP' : (vel < -0.3 ? 'DOWN' : 'FLAT'),
+      is_decelerating: is_decel
+    };
   }
 
   window.addEventListener('message', (event) => {
@@ -989,7 +1032,8 @@
         candles,
         timeframe: currentTimeframe || '1m',
         pair: currentPair,
-        min_confidence: botSettings.minConfidence || 68
+        min_confidence: botSettings.minConfidence || 68,
+        micro_ticks: getRecentTickMetrics(currentPair)
       };
 
       safeSendMessage({ type: 'FETCH_SIGNAL', payload }, (result) => {

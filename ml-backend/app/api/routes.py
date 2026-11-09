@@ -36,6 +36,7 @@ class PredictRequest(BaseModel):
     timeframe: str = '1m'
     pair: str = 'EURUSD'
     min_confidence: Optional[float] = None
+    micro_ticks: Optional[Dict[str, Any]] = None
 
 
 class CandleOutcomeRequest(BaseModel):
@@ -86,7 +87,13 @@ async def predict(request: PredictRequest, db: Session = Depends(get_db)):
         learner = get_adaptive_learner()
 
         min_conf = (request.min_confidence / 100.0) if request.min_confidence and request.min_confidence > 1 else request.min_confidence
-        result = predictor.predict(candle_dicts, request.timeframe, request.pair, min_conf)
+        result = predictor.predict(
+            candles=candle_dicts,
+            timeframe=request.timeframe,
+            pair=request.pair,
+            min_confidence_override=min_conf,
+            micro_ticks=request.micro_ticks
+        )
 
         # Auto-verify all matured unverified BUY/SELL signals for this pair (>= 65s old)
         # 65 seconds = 1 full 1-minute candle (60s) + 5s grace period.
