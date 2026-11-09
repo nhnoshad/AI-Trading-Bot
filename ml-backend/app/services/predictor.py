@@ -208,12 +208,15 @@ class TradingPredictor:
         timeframe: str = '1m',
         pair: str = 'EUR/USD',
         min_confidence_override: Optional[float] = None,
-        micro_ticks: Optional[Dict[str, Any]] = None
+        micro_ticks: Optional[Dict[str, Any]] = None,
+        min_confidence: Optional[float] = None
     ) -> Dict[str, Any]:
         """
-        Analyzes the selected pair's candle data using all 28 technical indicators
+        Analyzes the selected pair's candle data using all 33 technical indicators
         and the trained ML ensemble, returning BUY, SELL, or WAIT.
         """
+        if min_confidence_override is None and min_confidence is not None:
+            min_confidence_override = min_confidence / 100.0 if min_confidence > 1 else min_confidence
         t0 = time.perf_counter()
         df = calculate_indicators(candles)
         latest_row = df.iloc[-1]
@@ -494,6 +497,8 @@ class TradingPredictor:
             'entry_price': entry_price,
             'pair': pair,
             'timeframe': timeframe,
+            'dynamic_gate_threshold': round(dynamic_threshold * 100, 1),
+            'next_candle_summary': next_summary,
             'pattern': detected_pattern,
             'detected_pattern': detected_pattern,
             'quotex_dynamics': quotex_dyn,
