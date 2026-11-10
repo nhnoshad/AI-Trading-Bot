@@ -202,9 +202,6 @@
           <div class="flex gap-3">
             <select id="flt-pair" onchange="renderTradesTable()" class="bg-[#0d0d1a] border border-[#2a2a3e] rounded-lg px-3 py-1.5 text-xs text-white">
               <option value="ALL">All Pairs</option>
-              <option value="EURUSD">EURUSD</option>
-              <option value="GBPUSD">GBPUSD</option>
-              <option value="USDJPY">USDJPY</option>
             </select>
             <select id="flt-result" onchange="renderTradesTable()" class="bg-[#0d0d1a] border border-[#2a2a3e] rounded-lg px-3 py-1.5 text-xs text-white">
               <option value="ALL">All Results</option>
@@ -494,7 +491,9 @@
   </div>
 
   <script>
-    const API_BASE = 'http://localhost:8000';
+    const API_BASE = (window.location.origin && window.location.origin.startsWith('http'))
+      ? window.location.origin
+      : 'http://127.0.0.1:8000';
     let allTrades = [];
     let lastSignalObj = null;
 
@@ -544,7 +543,8 @@
           const pnlEl = document.getElementById('st-pnl');
           pnlEl.textContent = (pnl >= 0 ? '+' : '') + '$' + pnl.toFixed(2);
           pnlEl.className = 'text-2xl font-bold mt-1 ' + (pnl >= 0 ? 'text-green-400' : 'text-red-400');
-          document.getElementById('st-bestpair').textContent = `${s.best_pair || 'EURUSD'} (${s.streak || 0}${s.streak_dir || 'W'})`;
+          const streakBadge = `<span class="inline-block ml-1.5 px-2 py-0.5 rounded text-xs font-bold ${s.streak_dir === 'W' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}">${s.streak || 0}${s.streak_dir || 'W'}</span>`;
+          document.getElementById('st-bestpair').innerHTML = `${s.best_pair_display || s.best_pair || 'EUR/USD'} ${streakBadge}`;
           drawEquityCurve(s.equity_curve || []);
         }
         if (sigRes.ok) {
@@ -699,12 +699,29 @@
     }
 
     async function loadTrades() {
-      const resp = await fetch(API_BASE + '/api/trades?limit=200');
-      if (resp.ok) {
-        const data = await resp.json();
-        allTrades = data.trades || [];
-        renderTradesTable();
+      try {
+        const resp = await fetch(API_BASE + '/api/trades?limit=1000');
+        if (resp.ok) {
+          const data = await resp.json();
+          allTrades = data.trades || [];
+          populatePairFilter(data.all_pairs || []);
+          renderTradesTable();
+        }
+      } catch (err) {
+        console.error('Error loading trades:', err);
       }
+    }
+
+    function populatePairFilter(pairsList) {
+      const sel = document.getElementById('flt-pair');
+      if (!sel) return;
+      const cur = sel.value;
+      const unique = pairsList && pairsList.length
+        ? pairsList
+        : Array.from(new Set(allTrades.map(t => t.pair).filter(Boolean))).sort();
+      sel.innerHTML = `<option value="ALL">All Pairs (${allTrades.length} trades)</option>` +
+        unique.map(p => `<option value="${p}">${p}</option>`).join('');
+      if (unique.includes(cur)) sel.value = cur;
     }
 
     function renderTradesTable() {

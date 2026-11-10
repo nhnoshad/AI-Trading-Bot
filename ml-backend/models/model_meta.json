@@ -1,6 +1,6 @@
 {
-  "version": "1.0.31",
-  "trained_at": "2026-11-09T16:35:03.503093Z",
+  "version": "1.0.32",
+  "trained_at": "2026-11-09T16:57:01.247714Z",
   "features": [
     "rsi_14",
     "rsi_7",
@@ -36,111 +36,111 @@
     "candle_directionality",
     "bb_squeeze"
   ],
-  "n_samples": 3925,
-  "train_size": 3140,
-  "test_size": 785,
-  "accuracy": 0.5745,
-  "precision": 0.5797,
-  "recall": 0.6593,
-  "f1_score": 0.617,
+  "n_samples": 3944,
+  "train_size": 3155,
+  "test_size": 789,
+  "accuracy": 0.5881,
+  "precision": 0.5877,
+  "recall": 0.6814,
+  "f1_score": 0.6311,
   "confusion_matrix": [
     [
-      182,
+      186,
       195
     ],
     [
-      139,
-      269
+      130,
+      278
     ]
   ],
   "sub_models": [
     {
       "model": "XGBoost",
-      "accuracy": "57.6%",
-      "precision": "58.1%",
-      "recall": "65.7%",
-      "f1": "61.7%",
-      "weight": "37%",
+      "accuracy": "58.7%",
+      "precision": "58.5%",
+      "recall": "68.9%",
+      "f1": "63.3%",
+      "weight": "23%",
       "status": "Active"
     },
     {
       "model": "LightGBM",
-      "accuracy": "57.3%",
-      "precision": "57.7%",
-      "recall": "66.9%",
-      "f1": "62.0%",
-      "weight": "34%",
+      "accuracy": "59.3%",
+      "precision": "59.1%",
+      "recall": "69.1%",
+      "f1": "63.7%",
+      "weight": "30%",
       "status": "Active"
     },
     {
       "model": "CatBoost",
-      "accuracy": "56.9%",
-      "precision": "58.5%",
-      "recall": "58.8%",
-      "f1": "58.7%",
-      "weight": "8%",
+      "accuracy": "55.4%",
+      "precision": "55.4%",
+      "recall": "70.1%",
+      "f1": "61.9%",
+      "weight": "22%",
       "status": "Active"
     },
     {
       "model": "Random Forest",
-      "accuracy": "56.6%",
-      "precision": "57.7%",
-      "recall": "61.5%",
-      "f1": "59.5%",
-      "weight": "19%",
+      "accuracy": "57.9%",
+      "precision": "58.3%",
+      "recall": "65.4%",
+      "f1": "61.7%",
+      "weight": "22%",
       "status": "Active"
     }
   ],
   "feature_importance": [
     {
       "feature": "stoch_k",
-      "importance": 17.51
+      "importance": 17.89
     },
     {
       "feature": "rsi_14",
-      "importance": 11.04
-    },
-    {
-      "feature": "stoch_d",
-      "importance": 7.38
+      "importance": 10.88
     },
     {
       "feature": "williams_r",
-      "importance": 5.96
+      "importance": 6.45
+    },
+    {
+      "feature": "stoch_d",
+      "importance": 6.43
     },
     {
       "feature": "bb_position",
-      "importance": 5.22
+      "importance": 5.71
     },
     {
       "feature": "cci",
-      "importance": 4.71
-    },
-    {
-      "feature": "macd_hist",
-      "importance": 3.96
+      "importance": 4.11
     },
     {
       "feature": "rsi_7",
-      "importance": 3.4
+      "importance": 3.76
     },
     {
-      "feature": "upper_wick",
-      "importance": 2.92
+      "feature": "macd_hist",
+      "importance": 3.69
     },
     {
-      "feature": "adx",
-      "importance": 2.86
+      "feature": "bb_width",
+      "importance": 2.93
     },
     {
       "feature": "atr_14",
-      "importance": 2.8
+      "importance": 2.73
     },
     {
-      "feature": "sma_50",
-      "importance": 2.74
+      "feature": "upper_wick",
+      "importance": 2.72
+    },
+    {
+      "feature": "price_change_5",
+      "importance": 2.67
     }
   ],
   "retention_days": 35,
-  "elapsed_sec": 20.24
+  "elapsed_sec": 17.69
 }

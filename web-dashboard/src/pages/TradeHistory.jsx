@@ -72,11 +72,10 @@ export default function TradeHistory() {
           value={filter.pair}
           onChange={e => setFilter(f => ({ ...f, pair: e.target.value }))}
         >
-          <option value="ALL">All Pairs</option>
-          <option value="EURUSD">EURUSD</option>
-          <option value="GBPUSD">GBPUSD</option>
-          <option value="USDJPY">USDJPY</option>
-          <option value="AUDUSD">AUDUSD</option>
+          <option value="ALL">All Pairs ({trades.length})</option>
+          {Array.from(new Set(trades.map(t => t.pair).filter(Boolean))).sort().map(p => (
+            <option key={p} value={p}>{p}</option>
+          ))}
         </select>
         <select
           className="bg-[#0d0d1a] border border-[#2a2a3e] rounded px-3 py-1 text-sm text-gray-300"

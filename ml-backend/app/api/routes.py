@@ -355,7 +355,7 @@ async def record_candle_outcome(request: CandleOutcomeRequest, db: Session = Dep
 @router.get('/stats')
 async def get_stats(db: Session = Depends(get_db)):
     """Get overall and daily trading statistics + equity curve."""
-    trades = db.query(Trade).order_by(Trade.timestamp.asc()).all()
+    trades = db.query(Trade).order_by(Trade.id.asc()).all()
     signals_count = db.query(Signal).count()
     total = len(trades)
     wins = sum(1 for t in trades if t.result == 'WIN')
@@ -363,13 +363,42 @@ async def get_stats(db: Session = Depends(get_db)):
     win_rate = round(wins / total * 100, 2) if total > 0 else 0.0
     total_pnl = round(sum(t.pnl or 0 for t in trades), 2)
 
-    pair_wins = {}
+    # Detailed pair performance analysis
+    pair_stats = {}
     for t in trades:
+        if not t.pair:
+            continue
+        p = t.pair
+        if p not in pair_stats:
+            pair_stats[p] = {'wins': 0, 'losses': 0, 'total': 0, 'pnl': 0.0}
+        pair_stats[p]['total'] += 1
         if t.result == 'WIN':
-            pair_wins[t.pair] = pair_wins.get(t.pair, 0) + 1
-    best_pair = max(pair_wins, key=pair_wins.get) if pair_wins else 'EURUSD'
+            pair_stats[p]['wins'] += 1
+        elif t.result == 'LOSS':
+            pair_stats[p]['losses'] += 1
+        pair_stats[p]['pnl'] = round(pair_stats[p]['pnl'] + (t.pnl or 0.0), 2)
 
-    # Calculate current streak
+    # Best Pair: Pair with highest win rate (prioritize >= 3 trades for significance)
+    qualified = [p for p, st in pair_stats.items() if st['total'] >= 3]
+    if not qualified:
+        qualified = list(pair_stats.keys())
+
+    if qualified:
+        best_pair = max(
+            qualified,
+            key=lambda p: (
+                pair_stats[p]['wins'] / pair_stats[p]['total'],
+                pair_stats[p]['wins'],
+                pair_stats[p]['pnl']
+            )
+        )
+        bp_wr = round((pair_stats[best_pair]['wins'] / pair_stats[best_pair]['total']) * 100, 1)
+        best_pair_display = f"{best_pair} ({bp_wr}%)"
+    else:
+        best_pair = 'EUR/USD'
+        best_pair_display = 'EUR/USD (0%)'
+
+    # Calculate current streak strictly from newest trade backwards
     streak = 0
     streak_dir = 'W'
     for t in reversed(trades):
@@ -406,6 +435,7 @@ async def get_stats(db: Session = Depends(get_db)):
         'streak': streak,
         'streak_dir': streak_dir,
         'best_pair': best_pair,
+        'best_pair_display': best_pair_display,
         'best_timeframe': '1m',
         'equity_curve': equity_curve
     }
@@ -413,13 +443,13 @@ async def get_stats(db: Session = Depends(get_db)):
 
 @router.get('/trades')
 async def get_trades(
-    limit: int = Query(100, ge=1, le=500),
+    limit: int = Query(1000, ge=1, le=5000),
     pair: Optional[str] = None,
     result: Optional[str] = None,
     mode: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
-    """Return trade history with optional filters."""
+    """Return trade history with optional filters and distinct pair catalog."""
     q = db.query(Trade)
     if pair and pair != 'ALL':
         q = q.filter(Trade.pair == pair)
@@ -427,7 +457,9 @@ async def get_trades(
         q = q.filter(Trade.result == result)
     if mode and mode != 'ALL':
         q = q.filter(Trade.mode == mode)
-    rows = q.order_by(Trade.timestamp.desc()).limit(limit).all()
+    rows = q.order_by(Trade.id.desc()).limit(limit).all()
+    all_pairs = [p[0] for p in db.query(Trade.pair).distinct().all() if p[0]]
+    all_pairs.sort()
     return {
         'trades': [
             {
@@ -446,7 +478,8 @@ async def get_trades(
             }
             for r in rows
         ],
-        'count': len(rows)
+        'count': len(rows),
+        'all_pairs': all_pairs
     }
 
 
