@@ -53,13 +53,29 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return false;
 });
 
+async function fetchWithFallback(serverUrl, path, options) {
+  const primaryUrl = `${serverUrl}${path}`;
+  try {
+    return await fetch(primaryUrl, options);
+  } catch (err) {
+    if (serverUrl.includes('localhost')) {
+      const fallbackUrl = serverUrl.replace('localhost', '127.0.0.1') + path;
+      return await fetch(fallbackUrl, options);
+    } else if (serverUrl.includes('127.0.0.1')) {
+      const fallbackUrl = serverUrl.replace('127.0.0.1', 'localhost') + path;
+      return await fetch(fallbackUrl, options);
+    }
+    throw err;
+  }
+}
+
 async function handleFetchSignal(payload) {
   try {
     const settings = await chrome.storage.local.get(['serverUrl', 'minConfidence']);
     const serverUrl = settings.serverUrl || DEFAULT_SETTINGS.serverUrl;
     const minConf = settings.minConfidence || DEFAULT_SETTINGS.minConfidence;
 
-    const response = await fetch(`${serverUrl}/api/predict`, {
+    const response = await fetchWithFallback(serverUrl, '/api/predict', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -91,7 +107,7 @@ async function handleLogTrade(payload) {
   try {
     const settings = await chrome.storage.local.get(['serverUrl']);
     const serverUrl = settings.serverUrl || DEFAULT_SETTINGS.serverUrl;
-    const response = await fetch(`${serverUrl}/api/log-trade`, {
+    const response = await fetchWithFallback(serverUrl, '/api/log-trade', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -107,7 +123,7 @@ async function handleRecordCandleOutcome(payload) {
   try {
     const settings = await chrome.storage.local.get(['serverUrl']);
     const serverUrl = settings.serverUrl || DEFAULT_SETTINGS.serverUrl;
-    const response = await fetch(`${serverUrl}/api/record-candle-outcome`, {
+    const response = await fetchWithFallback(serverUrl, '/api/record-candle-outcome', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -124,7 +140,7 @@ async function handleGetStats() {
   try {
     const settings = await chrome.storage.local.get(['serverUrl']);
     const serverUrl = settings.serverUrl || DEFAULT_SETTINGS.serverUrl;
-    const response = await fetch(`${serverUrl}/api/stats`);
+    const response = await fetchWithFallback(serverUrl, '/api/stats');
     const data = await response.json();
     return { success: true, data };
   } catch (e) {

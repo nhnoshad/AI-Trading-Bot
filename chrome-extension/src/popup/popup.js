@@ -711,13 +711,24 @@ async function testConnection() {
   const connDot = document.getElementById('connDot');
   const connStatus = document.getElementById('connStatus');
   try {
-    const resp = await fetch(url + '/api/health');
-    if (resp.ok) {
+    let resp;
+    try {
+      resp = await fetch(url + '/api/health');
+    } catch (e1) {
+      if (url.includes('localhost')) {
+        resp = await fetch(url.replace('localhost', '127.0.0.1') + '/api/health');
+      } else if (url.includes('127.0.0.1')) {
+        resp = await fetch(url.replace('127.0.0.1', 'localhost') + '/api/health');
+      } else {
+        throw e1;
+      }
+    }
+    if (resp && resp.ok) {
       const data = await resp.json();
       if (connDot) connDot.className = 'conn-dot connected';
       if (connStatus) connStatus.textContent = `Online | Trained Model v${data.model_version}`;
     } else {
-      throw new Error('HTTP ' + resp.status);
+      throw new Error('HTTP ' + (resp ? resp.status : 'offline'));
     }
   } catch (e) {
     if (connDot) connDot.className = 'conn-dot';
