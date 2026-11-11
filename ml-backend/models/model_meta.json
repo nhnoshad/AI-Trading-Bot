@@ -1,6 +1,6 @@
 {
-  "version": "1.0.32",
-  "trained_at": "2026-11-09T16:57:01.247714Z",
+  "version": "1.0.0",
+  "trained_at": "2026-11-11T16:24:35.037533",
   "features": [
     "rsi_14",
     "rsi_7",
@@ -36,111 +36,8 @@
     "candle_directionality",
     "bb_squeeze"
   ],
-  "n_samples": 3944,
-  "train_size": 3155,
-  "test_size": 789,
-  "accuracy": 0.5881,
-  "precision": 0.5877,
-  "recall": 0.6814,
-  "f1_score": 0.6311,
-  "confusion_matrix": [
-    [
-      186,
-      195
-    ],
-    [
-      130,
-      278
-    ]
-  ],
-  "sub_models": [
-    {
-      "model": "XGBoost",
-      "accuracy": "58.7%",
-      "precision": "58.5%",
-      "recall": "68.9%",
-      "f1": "63.3%",
-      "weight": "23%",
-      "status": "Active"
-    },
-    {
-      "model": "LightGBM",
-      "accuracy": "59.3%",
-      "precision": "59.1%",
-      "recall": "69.1%",
-      "f1": "63.7%",
-      "weight": "30%",
-      "status": "Active"
-    },
-    {
-      "model": "CatBoost",
-      "accuracy": "55.4%",
-      "precision": "55.4%",
-      "recall": "70.1%",
-      "f1": "61.9%",
-      "weight": "22%",
-      "status": "Active"
-    },
-    {
-      "model": "Random Forest",
-      "accuracy": "57.9%",
-      "precision": "58.3%",
-      "recall": "65.4%",
-      "f1": "61.7%",
-      "weight": "22%",
-      "status": "Active"
-    }
-  ],
-  "feature_importance": [
-    {
-      "feature": "stoch_k",
-      "importance": 17.89
-    },
-    {
-      "feature": "rsi_14",
-      "importance": 10.88
-    },
-    {
-      "feature": "williams_r",
-      "importance": 6.45
-    },
-    {
-      "feature": "stoch_d",
-      "importance": 6.43
-    },
-    {
-      "feature": "bb_position",
-      "importance": 5.71
-    },
-    {
-      "feature": "cci",
-      "importance": 4.11
-    },
-    {
-      "feature": "rsi_7",
-      "importance": 3.76
-    },
-    {
-      "feature": "macd_hist",
-      "importance": 3.69
-    },
-    {
-      "feature": "bb_width",
-      "importance": 2.93
-    },
-    {
-      "feature": "atr_14",
-      "importance": 2.73
-    },
-    {
-      "feature": "upper_wick",
-      "importance": 2.72
-    },
-    {
-      "feature": "price_change_5",
-      "importance": 2.67
-    }
-  ],
-  "retention_days": 35,
-  "elapsed_sec": 17.69
+  "n_samples": 3973,
+  "train_size": 3178,
+  "test_size": 795,
+  "accuracy": 0.5786163522012578
 }

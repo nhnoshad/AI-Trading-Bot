@@ -38,6 +38,7 @@ class TradingPredictor:
         self.lgbm_model = None
         self.cb_model = None
         self.rf_model = None
+        self.mlp_model = None
         self.scaler = None
         self.model_version = settings.MODEL_VERSION
         self.confidence_threshold = 0.68   # Raised to 0.68 (68%) for Elite Quotex Sniping Filter
@@ -53,6 +54,7 @@ class TradingPredictor:
             lgbm_path = os.path.join(MODELS_DIR, 'lgbm_model.pkl')
             cb_path = os.path.join(MODELS_DIR, 'cb_model.pkl')
             rf_path = os.path.join(MODELS_DIR, 'rf_model.pkl')
+            mlp_path = os.path.join(MODELS_DIR, 'mlp_model.pkl')
             scaler_path = os.path.join(MODELS_DIR, 'scaler.pkl')
             meta_path = os.path.join(MODELS_DIR, 'model_meta.json')
 
@@ -68,6 +70,9 @@ class TradingPredictor:
                 logger.info(f'Loaded CatBoost model from {cb_path}')
             if os.path.exists(rf_path):
                 self.rf_model = joblib.load(rf_path)
+            if os.path.exists(mlp_path):
+                self.mlp_model = joblib.load(mlp_path)
+                logger.info(f'Loaded Deep MLP model from {mlp_path}')
             if os.path.exists(scaler_path):
                 self.scaler = joblib.load(scaler_path)
                 logger.info(f'Loaded scaler from {scaler_path}')
@@ -230,8 +235,8 @@ class TradingPredictor:
         model_preds = {}
 
         if self.scaler is not None and (self.model is not None or self.xgb_model is not None):
-            features = df[FEATURE_COLUMNS].iloc[-1:].values
-            features_scaled = self.scaler.transform(features)
+            features = np.nan_to_num(df[FEATURE_COLUMNS].iloc[-1:].values, nan=0.0)
+            features_scaled = np.nan_to_num(self.scaler.transform(features), nan=0.0)
 
             if self.xgb_model is not None and self.lgbm_model is not None and self.rf_model is not None:
                 p_xgb = self.xgb_model.predict_proba(features_scaled)[0]
@@ -244,18 +249,26 @@ class TradingPredictor:
                     'rf': round(float(p_rf[1]), 4)
                 }
 
-                w_xgb = weights.get('xgb', 0.30)
-                w_lgbm = weights.get('lgbm', 0.25)
-                w_cb = weights.get('cb', 0.25)
-                w_rf = weights.get('rf', 0.20)
+                w_xgb = weights.get('xgb', 0.24)
+                w_lgbm = weights.get('lgbm', 0.20)
+                w_cb = weights.get('cb', 0.22)
+                w_rf = weights.get('rf', 0.16)
+                w_mlp = weights.get('mlp', 0.18)
+
+                components = [(w_xgb, p_xgb), (w_lgbm, p_lgbm), (w_rf, p_rf)]
 
                 if self.cb_model is not None:
                     p_cb = self.cb_model.predict_proba(features_scaled)[0]
                     model_preds['cb'] = round(float(p_cb[1]), 4)
-                    ml_proba = w_xgb * p_xgb + w_lgbm * p_lgbm + w_cb * p_cb + w_rf * p_rf
-                else:
-                    tot = w_xgb + w_lgbm + w_rf
-                    ml_proba = (w_xgb * p_xgb + w_lgbm * p_lgbm + w_rf * p_rf) / tot
+                    components.append((w_cb, p_cb))
+
+                if self.mlp_model is not None:
+                    p_mlp = self.mlp_model.predict_proba(features_scaled)[0]
+                    model_preds['mlp'] = round(float(p_mlp[1]), 4)
+                    components.append((w_mlp, p_mlp))
+
+                tot_w = sum(w for w, _ in components)
+                ml_proba = sum(w * p for w, p in components) / tot_w
             else:
                 ml_proba = self.model.predict_proba(features_scaled)[0]
 
@@ -263,9 +276,9 @@ class TradingPredictor:
             ml_conf = float(ml_proba[ml_dir])
 
             # ── Epistemic Uncertainty & Model Disagreement Variance Gate ────────────
-            # Computes variance and standard deviation across all 4 sub-models:
-            # Low variance (std <= 0.05) = Strong unanimous consensus across all tree architectures.
-            # High variance (std > 0.08) or 2 vs 2 split = Epistemic ambiguity (dangerous coin-flip noise).
+            # Computes variance and standard deviation across all 5 sub-models:
+            # Low variance (std <= 0.045) = Strong unanimous consensus across all model architectures.
+            # High variance (std > 0.085) or deadlock = Epistemic ambiguity (dangerous coin-flip noise).
             ensemble_std = 0.0
             if model_preds:
                 prob_vals = list(model_preds.values())
@@ -274,18 +287,21 @@ class TradingPredictor:
                 votes_sell = sum(1 for v in model_preds.values() if v <= 0.50)
                 n_models = len(model_preds)
 
-                is_deadlock = (votes_buy == 2 and votes_sell == 2)
-                majority_agrees = (ml_dir == 1 and votes_buy >= max(2, n_models // 2)) or \
-                                  (ml_dir == 0 and votes_sell >= max(2, n_models // 2))
+                is_deadlock = (n_models % 2 == 0 and votes_buy == votes_sell)
+                majority_thresh = (n_models // 2) + 1
+                majority_agrees = (ml_dir == 1 and votes_buy >= majority_thresh) or \
+                                  (ml_dir == 0 and votes_sell >= majority_thresh)
+                is_unanimous = (ml_dir == 1 and votes_buy == n_models) or \
+                               (ml_dir == 0 and votes_sell == n_models)
 
                 if is_deadlock or ensemble_std > 0.085:
                     # Model disagreement: push toward WAIT to avoid coin flips
                     ml_conf = min(ml_conf, 0.58)
                 elif not majority_agrees:
                     ml_conf = min(ml_conf, 0.61)
-                elif ensemble_std <= 0.045:
-                    # Unanimous consensus bonus
-                    ml_conf = min(0.96, ml_conf + 0.035)
+                elif is_unanimous or ensemble_std <= 0.040:
+                    # Unanimous / strong consensus bonus across all 5 architectures
+                    ml_conf = min(0.97, ml_conf + 0.04)
 
             # ── ADX-aware trend gate ──────────────────────────────────────────────────
             adx_val = float(latest_row.get('adx', 0))
@@ -331,7 +347,7 @@ class TradingPredictor:
         else:
             prediction, confidence_raw = rule_dir, rule_conf
             p_up = confidence_raw if prediction == 1 else (1.0 - confidence_raw)
-            model_preds = {'xgb': round(p_up, 4), 'lgbm': round(p_up, 4), 'rf': round(p_up, 4)}
+            model_preds = {'xgb': round(p_up, 4), 'lgbm': round(p_up, 4), 'rf': round(p_up, 4), 'mlp': round(p_up, 4)}
 
         # ── World-Famous Candlestick Pattern Detection ───────────────────────────
         detected_pattern = detect_candlestick_pattern(candles)

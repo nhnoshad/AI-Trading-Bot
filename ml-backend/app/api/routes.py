@@ -181,10 +181,11 @@ async def health(db: Session = Depends(get_db)):
         'last_prediction': predictor.last_prediction_time,
         'confidence_threshold': predictor.confidence_threshold,
         'ensemble_weights': {
-            'xgb': learner.weights.get('xgb', 0.30),
-            'lgbm': learner.weights.get('lgbm', 0.25),
-            'cb': learner.weights.get('cb', 0.25),
-            'rf': learner.weights.get('rf', 0.20)
+            'xgb': learner.weights.get('xgb', 0.24),
+            'lgbm': learner.weights.get('lgbm', 0.20),
+            'cb': learner.weights.get('cb', 0.22),
+            'rf': learner.weights.get('rf', 0.16),
+            'mlp': learner.weights.get('mlp', 0.18)
         },
         'timestamp': datetime.utcnow().isoformat() + 'Z'
     }

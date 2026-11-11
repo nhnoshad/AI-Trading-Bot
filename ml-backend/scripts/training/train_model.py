@@ -15,6 +15,7 @@ from datetime import datetime
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestClassifier, VotingClassifier
+from sklearn.neural_network import MLPClassifier
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 from xgboost import XGBClassifier
 from lightgbm import LGBMClassifier
@@ -78,7 +79,7 @@ def load_and_process_data(csv_path: str) -> tuple:
 
     # Features and target — only use columns that exist
     available_features = [f for f in FEATURE_COLUMNS if f in df_features.columns]
-    X = df_features[available_features].values
+    X = np.nan_to_num(df_features[available_features].values, nan=0.0, posinf=0.0, neginf=0.0)
     y = df_features['label'].values.astype(int)
 
     print(f'Features: {len(available_features)}, Samples: {len(X)}')
@@ -125,13 +126,29 @@ def train_models(X_train, y_train):
     )
     rf.fit(X_train, y_train)
 
-    print('Building Ensemble (Voting Classifier)...')
+    print('Training Deep MLP Neural Network (Neuro-Embeddings)...')
+    mlp = MLPClassifier(
+        hidden_layer_sizes=(128, 64, 32),
+        activation='relu',
+        solver='adam',
+        alpha=0.005,
+        batch_size=64,
+        learning_rate='adaptive',
+        learning_rate_init=0.002,
+        max_iter=350,
+        early_stopping=True,
+        validation_fraction=0.15,
+        random_state=42
+    )
+    mlp.fit(X_train, y_train)
+
+    print('Building 5-Way Hybrid Neuro-Ensemble (Soft Stacking Probability Blender)...')
     if cb is not None:
-        estimators = [('xgb', xgb), ('lgbm', lgbm), ('cb', cb), ('rf', rf)]
-        weights = [0.30, 0.25, 0.25, 0.20]
+        estimators = [('xgb', xgb), ('lgbm', lgbm), ('cb', cb), ('rf', rf), ('mlp', mlp)]
+        weights = [0.24, 0.20, 0.22, 0.16, 0.18]
     else:
-        estimators = [('xgb', xgb), ('lgbm', lgbm), ('rf', rf)]
-        weights = [0.40, 0.35, 0.25]
+        estimators = [('xgb', xgb), ('lgbm', lgbm), ('rf', rf), ('mlp', mlp)]
+        weights = [0.30, 0.28, 0.20, 0.22]
 
     ensemble = VotingClassifier(
         estimators=estimators,
@@ -140,7 +157,7 @@ def train_models(X_train, y_train):
     )
     ensemble.fit(X_train, y_train)
 
-    return ensemble, xgb, lgbm, cb, rf
+    return ensemble, xgb, lgbm, cb, rf, mlp
 
 
 def evaluate_model(model, X_test, y_test, model_name='Ensemble'):
@@ -176,17 +193,17 @@ def main():
 
     # Scale features
     scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
+    X_train_scaled = np.nan_to_num(scaler.fit_transform(X_train), nan=0.0)
+    X_test_scaled = np.nan_to_num(scaler.transform(X_test), nan=0.0)
 
     # Train
-    ensemble, xgb, lgbm, cb, rf = train_models(X_train_scaled, y_train)
+    ensemble, xgb, lgbm, cb, rf, mlp = train_models(X_train_scaled, y_train)
 
     # Evaluate each model
     eval_list = [('XGBoost', xgb), ('LightGBM', lgbm)]
     if cb is not None:
         eval_list.append(('CatBoost', cb))
-    eval_list.extend([('Random Forest', rf), ('Ensemble', ensemble)])
+    eval_list.extend([('Random Forest', rf), ('Deep MLP', mlp), ('5-Way Neuro-Ensemble', ensemble)])
 
     for name, m in eval_list:
         evaluate_model(m, X_test_scaled, y_test, name)
@@ -197,17 +214,21 @@ def main():
     xgb_path = os.path.join(MODELS_DIR, 'xgb_model.pkl')
     lgbm_path = os.path.join(MODELS_DIR, 'lgbm_model.pkl')
     rf_path = os.path.join(MODELS_DIR, 'rf_model.pkl')
+    mlp_path = os.path.join(MODELS_DIR, 'mlp_model.pkl')
 
     joblib.dump(ensemble, ensemble_path)
     joblib.dump(scaler, scaler_path)
     joblib.dump(xgb, xgb_path)
     joblib.dump(lgbm, lgbm_path)
     joblib.dump(rf, rf_path)
+    joblib.dump(mlp, mlp_path)
 
     if cb is not None:
         cb_path = os.path.join(MODELS_DIR, 'cb_model.pkl')
         joblib.dump(cb, cb_path)
         print(f'CatBoost model: {cb_path}')
+
+    print(f'Deep MLP model: {mlp_path}')
 
     # Save metadata
     meta = {
