@@ -4,12 +4,41 @@ let currentMode = 'MANUAL';
 let botRunning = false;
 let stats = { trades: 0, wins: 0, losses: 0, pnl: 0, streak: 0, streakDir: 'W' };
 let currentCandleState = null;
+let currentTimeframe = '1m';
+
+function getTfSeconds(tf) {
+  const t = (tf || '1m').toLowerCase();
+  if (t === '5s') return 5;
+  if (t === '10s') return 10;
+  if (t === '15s') return 15;
+  if (t === '30s') return 30;
+  if (t === '1m') return 60;
+  if (t === '2m') return 120;
+  if (t === '5m') return 300;
+  return 60;
+}
+
+function updateActiveTfUI(tf) {
+  currentTimeframe = (tf || '1m').toLowerCase();
+  const sec = getTfSeconds(currentTimeframe);
+  const badge = document.getElementById('activeTfBadge');
+  if (badge) badge.textContent = `${currentTimeframe} (${sec}s)`;
+  document.querySelectorAll('.tf-btn').forEach(btn => {
+    if (btn.getAttribute('data-tf') === currentTimeframe) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+}
 
 function formatMinuteString(ts) {
   const d = new Date(ts);
   const hh = String(d.getHours()).padStart(2, '0');
   const mm = String(d.getMinutes()).padStart(2, '0');
-  return `${hh}:${mm}`;
+  const ss = String(d.getSeconds()).padStart(2, '0');
+  const sec = getTfSeconds(currentTimeframe);
+  return sec < 60 ? `${hh}:${mm}:${ss}` : `${hh}:${mm}`;
 }
 
 function isContextValid() {
@@ -50,7 +79,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   await testConnection();
 
   // Instant render from storage first to eliminate blank/flicker delay
-  safeStorageGet(['currentCandleState', 'lastSignal'], (data) => {
+  safeStorageGet(['currentCandleState', 'lastSignal', 'currentTimeframe'], (data) => {
+    if (data.currentTimeframe) {
+      updateActiveTfUI(data.currentTimeframe);
+    }
     if (data.currentCandleState) {
       renderCandlePredictionState(data.currentCandleState);
     } else if (data.lastSignal) {
@@ -65,15 +97,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Live 1-second countdown synchronized with wall-clock minutes and locked candle state
   setInterval(() => {
     const now = Date.now();
-    const currentMinuteBucket = Math.floor(now / 60000) * 60000;
-    const secondsIntoMinute = Math.floor((now % 60000) / 1000);
-    // Quotex counts down from 59 to 00 for a 1-minute candle:
-    const secondsLeft = Math.max(0, 59 - secondsIntoMinute);
+    const tfSec = getTfSeconds(currentTimeframe);
+    const tfMs = tfSec * 1000;
+    const currentBucket = Math.floor(now / tfMs) * tfMs;
+    const msIntoBar = ((now % tfMs) + tfMs) % tfMs;
+    const secondsLeft = Math.max(0, Math.floor((tfMs - msIntoBar) / 1000));
     const mm = String(Math.floor(secondsLeft / 60)).padStart(2, '0');
     const ss = String(secondsLeft % 60).padStart(2, '0');
     const clockStr = `${mm}:${ss}`;
-    const currentMinStr = formatMinuteString(currentMinuteBucket);
-    const nextMinStr = formatMinuteString(currentMinuteBucket + 60000);
+    const currentMinStr = formatMinuteString(currentBucket);
+    const nextMinStr = formatMinuteString(currentBucket + tfMs);
 
     const labelEl = document.getElementById('signalLabel');
     const expEl = document.getElementById('signalExpiry');
@@ -134,6 +167,18 @@ function setupEventListeners() {
     openDashboard();
   });
 
+  document.querySelectorAll('.tf-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const tf = e.currentTarget.getAttribute('data-tf');
+      if (!tf) return;
+      updateActiveTfUI(tf);
+      const sec = getTfSeconds(tf);
+      safeStorageSet({ currentTimeframe: tf, tradeDuration: sec });
+      sendMessageToContent({ type: 'SET_TIMEFRAME', timeframe: tf, tradeDuration: sec });
+      syncWithActiveTab(true);
+    });
+  });
+
   document.getElementById('tradeDuration')?.addEventListener('change', saveSettings);
   document.getElementById('serverUrl')?.addEventListener('change', saveSettings);
   document.getElementById('minConfidence')?.addEventListener('input', (e) => {
@@ -191,6 +236,7 @@ async function syncWithActiveTab(forceRescan = false) {
     }
 
     if (response && response.success) {
+      if (response.timeframe) updateActiveTfUI(response.timeframe);
       renderCandlePredictionState(response);
       return;
     }
@@ -388,8 +434,9 @@ function generatePairSpecificCandles(pair, count = 120, livePrice = null) {
 // ── Settings & Stats ────────────────────────────────────────────────────────
 async function loadSettings() {
   safeStorageGet([
-    'tradeDuration', 'minConfidence', 'serverUrl', 'botRunning', 'lastSignal'
+    'tradeDuration', 'minConfidence', 'serverUrl', 'botRunning', 'lastSignal', 'currentTimeframe'
   ], (data) => {
+    if (data.currentTimeframe) updateActiveTfUI(data.currentTimeframe);
     const tradeDurationEl = document.getElementById('tradeDuration');
     if (tradeDurationEl && data.tradeDuration) tradeDurationEl.value = data.tradeDuration;
 

@@ -177,13 +177,18 @@ def calculate_indicators(candles: List[Dict[str, Any]]) -> pd.DataFrame:
     df['cmo_14'] = (100.0 * (gain_sum14 - loss_sum14) / (gain_sum14 + loss_sum14 + 1e-9)).fillna(0.0)
 
     # C) Hull Moving Average (Alan Hull - Zero-Lag Trend Filter)
-    w8 = np.arange(1, 9)
-    w16 = np.arange(1, 17)
-    w4 = np.arange(1, 5)
-    wma8 = df['close'].rolling(8).apply(lambda p: np.dot(p, w8) / 36.0, raw=True)
-    wma16 = df['close'].rolling(16).apply(lambda p: np.dot(p, w16) / 136.0, raw=True)
-    diff_hma = (2.0 * wma8 - wma16).fillna(df['close'])
-    hma16 = diff_hma.rolling(4).apply(lambda p: np.dot(p, w4) / 10.0, raw=True).fillna(df['close'])
+    def _fast_wma(s: pd.Series, period: int) -> pd.Series:
+        w = np.arange(1, period + 1, dtype=float)
+        w /= w.sum()
+        vals = s.values
+        conv = np.convolve(vals, w[::-1], mode='full')[:len(vals)]
+        conv[:period - 1] = vals[:period - 1]
+        return pd.Series(conv, index=s.index)
+
+    wma8 = _fast_wma(df['close'], 8)
+    wma16 = _fast_wma(df['close'], 16)
+    diff_hma = 2.0 * wma8 - wma16
+    hma16 = _fast_wma(diff_hma, 4)
     df['hma_16_slope'] = ((df['close'] - hma16) / close_safe * 100.0).fillna(0.0)
 
     # D) Money Flow Index (MFI - Volume-Weighted RSI)

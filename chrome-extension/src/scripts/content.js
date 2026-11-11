@@ -514,10 +514,12 @@
     if (isNaN(p) || p <= 0) return;
     recordLivePairPrice(pair, p);
     const tickTs = (typeof ts === 'number' && ts > 1e9) ? (ts < 1e11 ? ts * 1000 : ts) : Date.now();
-    const minuteBucket = Math.floor(tickTs / 60000) * 60000;
+    const tfSec = getEffectiveTimeframeSeconds();
+    const tfMs = tfSec * 1000;
+    const candleBucket = Math.floor(tickTs / tfMs) * tfMs;
     const existing = pairTickCandles[pair];
-    if (!existing || existing.bucket !== minuteBucket) {
-      // A new minute has started → save the completed candle to the buffer
+    if (!existing || existing.bucket !== candleBucket) {
+      // A new candle has started → save the completed candle to the buffer
       // so evaluateAndRecordCandleOutcome can read its true close price
       if (existing) {
         // Store last close before this new tick (= true close of completed candle)
@@ -525,8 +527,8 @@
         addCandleForPair(pair, existing);
       }
       pairTickCandles[pair] = {
-        bucket: minuteBucket,
-        timestamp: minuteBucket,
+        bucket: candleBucket,
+        timestamp: candleBucket,
         open: p,
         high: p,
         low: p,
@@ -904,7 +906,7 @@
       pairHash = Math.imul(pairHash, 16777619) >>> 0;
     }
 
-    const stepMs = (currentTimeframe === '5m') ? 300000 : 60000;
+    const stepMs = getEffectiveTimeframeSeconds() * 1000;
     const currentStep = Math.floor(Date.now() / (stepMs / 10));
     const startStep = currentStep - synthCount;
     const freq1 = 12.5 + (pairHash % 7) * 0.6;
@@ -969,29 +971,98 @@
     return combined.slice(-count);
   }
 
-  // ── 4. Watch for Pair Switching on https://market-qx.info/en/demo-trade ─────
+  // ── 4. Dynamic Timeframe Switching & Watcher ──────────────────────────────
+  function detectActiveTimeframeFromPage() {
+    const tfSelectors = [
+      '[class*="timeframe"].active', '[class*="timeframe"][class*="selected"]',
+      '[class*="period"].active', '[class*="period"].selected',
+      '[class*="chart-period"].active', '[class*="chart-period"].selected',
+      '.active[data-timeframe]', '[data-active-timeframe]',
+      '[class*="time-frame-item"].active', '[class*="time-frame-item"].selected'
+    ];
+    for (const sel of tfSelectors) {
+      const el = document.querySelector(sel);
+      if (el && el.textContent) {
+        const t = el.textContent.trim().toLowerCase();
+        if (/^(5s|10s|15s|30s|1m|2m|3m|5m|10m|15m|30m|1h)$/.test(t)) {
+          return t;
+        }
+      }
+    }
+    return null;
+  }
+
+  function switchTimeframe(newTf, triggerRescan = true) {
+    if (!newTf || newTf.toLowerCase() === currentTimeframe.toLowerCase()) return;
+    currentTimeframe = newTf.toLowerCase();
+    const sec = getEffectiveTimeframeSeconds();
+    botSettings.tradeDuration = sec;
+
+    // Update overlay timeframe buttons & duration badge
+    if (overlayElement) {
+      overlayElement.querySelectorAll('.ov-tf-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tf === currentTimeframe);
+      });
+      const expiryEl = overlayElement.querySelector('#ov-expiry-badge');
+      if (expiryEl) {
+        expiryEl.innerHTML = `⏱️ DURATION: ${currentTimeframe.toUpperCase()} (${sec}s)`;
+      }
+    }
+
+    // Reset predictions so stale duration/candles do not linger
+    activeCandlePrediction = null;
+    pendingNextCandlePrediction = null;
+    lastCompletedMinuteBucket = 0;
+
+    showOverlayNotice(`⏱️ Timeframe switched to ${currentTimeframe.toUpperCase()} (${sec}s)`);
+    safeStorageSet({ currentTimeframe, tradeDuration: sec });
+    broadcastCandleState();
+
+    if (triggerRescan && isRunning) {
+      fetchSignalForActivePair(true);
+    }
+  }
+
+  // ── Watch for Pair & Timeframe Switching on Quotex ──────────────────────────
   function startPairSwitchWatcher() {
     if (pairWatcherTimer) clearInterval(pairWatcherTimer);
 
-    const checkPairSwitch = () => {
+    const checkStateSwitch = () => {
       if (teardownIfOrphaned()) return;
-      const detected = detectActivePairFromPage();
-      if (detected && detected !== currentPair) {
-        currentPair = detected;
-        // Clear stale canvas price from the old pair so we immediately pick up the new pair's price
+      const detectedPair = detectActivePairFromPage();
+      if (detectedPair && detectedPair !== currentPair) {
+        currentPair = detectedPair;
+        // Clear stale canvas price from old pair
         lastCanvasPrice = null;
         activeCandlePrediction = null;
         pendingNextCandlePrediction = null;
-        showOverlayNotice(`🔍 Pair switched to ${currentPair} — Preparing next candle prediction...`);
+        showOverlayNotice(`🔍 Pair switched to ${currentPair} — Preparing prediction...`);
         setTimeout(() => fetchSignalForActivePair(true), 180);
+      }
+
+      const detectedTf = detectActiveTimeframeFromPage();
+      if (detectedTf && detectedTf !== currentTimeframe) {
+        switchTimeframe(detectedTf, true);
       }
     };
 
-    pairWatcherTimer = setInterval(checkPairSwitch, 600);  // Faster 900ms→600ms for snappier pair-switch detection
-    document.addEventListener('click', () => {
+    pairWatcherTimer = setInterval(checkStateSwitch, 600);
+    document.addEventListener('click', (e) => {
       if (teardownIfOrphaned()) return;
-      setTimeout(checkPairSwitch, 250);
-      setTimeout(checkPairSwitch, 700);
+      const clickedEl = e.target;
+      if (clickedEl && clickedEl.textContent) {
+        const txt = clickedEl.textContent.trim().toLowerCase();
+        if (/^(5s|10s|15s|30s|1m|2m|3m|5m|10m|15m|30m|1h)$/.test(txt)) {
+          setTimeout(() => {
+            const detectedTf = detectActiveTimeframeFromPage() || txt;
+            if (detectedTf && detectedTf !== currentTimeframe) {
+              switchTimeframe(detectedTf, true);
+            }
+          }, 150);
+        }
+      }
+      setTimeout(checkStateSwitch, 250);
+      setTimeout(checkStateSwitch, 700);
     }, true);
   }
 
@@ -1025,9 +1096,10 @@
       }
 
       secondsUntilNext = 5;
-      // Minimum 2 full days of market analysis (2880 candles for 1m, 576 for 5m)
-      const reqCount = (currentTimeframe === '5m') ? 576 : 2880;
+      // High-efficiency payload: 120 candles gives complete depth for 50-SMA/21-EMA/14-RSI without bloating IPC
+      const reqCount = 120;
       const candles = buildCandleWindowForPair(currentPair, reqCount);
+      const tfSec = getEffectiveTimeframeSeconds();
       const payload = {
         candles,
         timeframe: currentTimeframe || '1m',
@@ -1046,11 +1118,10 @@
         lastSignal = result.data;
         recordSignalInHistory(lastSignal);
 
-        // Store as the pending prediction for the upcoming candle
-        const now = Date.now();
-        const currentMinuteBucket = Math.floor(now / 60000) * 60000;
-        const nextMinBucket = currentMinuteBucket + 60000;
-        const nextMinStr = formatMinuteString(nextMinBucket);
+        // Store as the pending prediction for the upcoming candle using dynamic timeframe
+        const tInfo = getCandleTimeRemaining();
+        const nextMinBucket = tInfo.bucket + tInfo.tfMs;
+        const nextMinStr = tInfo.nextMinStr;
 
         pendingNextCandlePrediction = {
           pair: currentPair,
@@ -1060,7 +1131,7 @@
           entry_price: currentPrice || lastSignal.entry_price || getBasePriceForPair(currentPair),
           signal_id: lastSignal.signal_id,
           timeframe: currentTimeframe || '1m',
-          recommended_duration: lastSignal.recommended_duration || 60,
+          recommended_duration: tfSec,
           targetMinuteBucket: nextMinBucket,
           targetMinuteStr: nextMinStr,
           indicators: lastSignal.indicators,
@@ -1338,7 +1409,7 @@
             entry_price: exitPHint || currentPrice || lastSignal.entry_price || getBasePriceForPair(currentPair),
             signal_id: lastSignal.signal_id,
             timeframe: currentTimeframe || '1m',
-            recommended_duration: 60,
+            recommended_duration: tInfo.tfSec || 60,
             indicators: lastSignal.indicators,
             pattern: lastSignal.pattern || lastSignal.detected_pattern,
             sniper_entry_advice: lastSignal.sniper_entry_advice,
@@ -1351,21 +1422,25 @@
           }
         }
 
-        // 3. Evaluate completed candle outcome with 1.5s delay so the tick buffer
-        //    has time to push the last tick of the completed candle into pairCandleBuffers
-        //    before we read it in evaluateAndRecordCandleOutcome().
-        if (completedPrediction && (completedPrediction.candleStartBucket === justCompletedBucket || Math.abs(completedPrediction.candleStartBucket - justCompletedBucket) <= 70000)) {
+        // 3. Evaluate completed candle outcome with delay so tick buffer
+        //    captures the boundary tick before reading outcome
+        const evalThreshold = tInfo.tfMs + 10000;
+        if (completedPrediction && (completedPrediction.candleStartBucket === justCompletedBucket || Math.abs(completedPrediction.candleStartBucket - justCompletedBucket) <= evalThreshold)) {
           const predSnapshot = completedPrediction; // freeze reference
           const hintAtBoundary = exitPHint;
+          const outcomeDelayMs = Math.min(1500, Math.max(400, Math.floor(tInfo.tfMs * 0.1)));
           setTimeout(() => {
             if (teardownIfOrphaned()) return;
             evaluateAndRecordCandleOutcome(justCompletedBucket, hintAtBoundary, predSnapshot);
-          }, 1500);
+          }, outcomeDelayMs);
         }
       }
 
-      // Pre-scan for the upcoming candle when 18s and 6s remain in current candle
-      if (secondsLeftInCandle === 18 || secondsLeftInCandle === 6) {
+      // Pre-scan for the upcoming candle dynamically scaled to timeframe
+      // 60s -> 16s & 6s | 30s -> 8s & 3s | 15s -> 4s & 2s | 10s/5s -> 2s & 1s
+      const scanWindow1 = Math.max(2, Math.floor(tInfo.tfSec * 0.28));
+      const scanWindow2 = Math.max(1, Math.floor(tInfo.tfSec * 0.10));
+      if (secondsLeftInCandle === scanWindow1 || secondsLeftInCandle === scanWindow2) {
         fetchSignalForActivePair(false);
       }
 
@@ -1480,6 +1555,17 @@
           <span class="ov-price-badge" id="ov-price-badge">--</span>
         </div>
 
+        <!-- Dynamic Timeframe Selector Bar (Synchronized with Quotex Chart) -->
+        <div class="ov-tf-row" id="ov-tf-row">
+          <button type="button" class="ov-tf-btn ${currentTimeframe === '5s' ? 'active' : ''}" data-tf="5s">5s</button>
+          <button type="button" class="ov-tf-btn ${currentTimeframe === '10s' ? 'active' : ''}" data-tf="10s">10s</button>
+          <button type="button" class="ov-tf-btn ${currentTimeframe === '15s' ? 'active' : ''}" data-tf="15s">15s</button>
+          <button type="button" class="ov-tf-btn ${currentTimeframe === '30s' ? 'active' : ''}" data-tf="30s">30s</button>
+          <button type="button" class="ov-tf-btn ${currentTimeframe === '1m' ? 'active' : ''}" data-tf="1m">1m</button>
+          <button type="button" class="ov-tf-btn ${currentTimeframe === '2m' ? 'active' : ''}" data-tf="2m">2m</button>
+          <button type="button" class="ov-tf-btn ${currentTimeframe === '5m' ? 'active' : ''}" data-tf="5m">5m</button>
+        </div>
+
         <!-- 5. Rescan & 6. Stop Controls -->
         <div class="ov-actions">
           <button type="button" class="ov-scan-big-btn" id="ov-scan-now-btn">🔍 SCAN SELECTED PAIR NOW</button>
@@ -1532,6 +1618,14 @@
       fetchSignalForActivePair(true, (res) => {
         btn.disabled = false;
         btn.textContent = `🔍 RESCAN ${currentPair || 'PAIR'} NOW`;
+      });
+    });
+
+    overlayElement.querySelectorAll('.ov-tf-btn').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const tf = btn.dataset.tf;
+        if (tf) switchTimeframe(tf, true);
       });
     });
 
@@ -1659,13 +1753,19 @@
       noteEl.textContent = candlePredictionStats.lastLearningNote;
     }
 
+    // Keep overlay timeframe buttons visually synchronized
+    const curTfNorm = (currentTimeframe || '1m').toLowerCase();
+    overlayElement.querySelectorAll('.ov-tf-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.tf === curTfNorm);
+    });
+
     if (!signalEl) return;
 
     // Check whether we have an active locked candle running for this minute
     const isCandleActive = Boolean(activeCandlePrediction && activeCandlePrediction.candleStartBucket === currentMinuteBucket);
 
     if (isCandleActive) {
-      // ── CANDLE IS CURRENTLY ACTIVE & LOCKED (e.g. 11:28 from 11:28:00 to 11:28:59) ──
+      // ── CANDLE IS CURRENTLY ACTIVE & LOCKED ──
       const sig = activeCandlePrediction.direction || activeCandlePrediction.signal || 'WAIT';
       const labelText = sig === 'BUY' ? '🟢 BUY' : sig === 'SELL' ? '🔴 SELL' : '⏳ WAIT';
 
@@ -1689,7 +1789,7 @@
       }
 
       if (expiryEl) {
-        expiryEl.innerHTML = `⏱️ DURATION: 1m (<b>${clockStr}</b> left • Candle ${activeCandlePrediction.candleMinuteStr} Active • Locked)`;
+        expiryEl.innerHTML = `⏱️ DURATION: ${(currentTimeframe || '1m').toUpperCase()} (<b>${clockStr}</b> left • Candle ${activeCandlePrediction.candleMinuteStr} Active • Locked)`;
         expiryEl.style.background = 'rgba(0, 255, 136, 0.16)';
         expiryEl.style.borderColor = 'rgba(0, 255, 136, 0.45)';
         expiryEl.style.color = '#00ff88';
@@ -1708,7 +1808,7 @@
       // Render pills from active prediction
       renderIndicatorPills(activeCandlePrediction.indicators);
     } else {
-      // ── WAITING FOR NEXT CANDLE TO START (e.g. at 11:27 before 11:28 begins) ──
+      // ── WAITING FOR NEXT CANDLE TO START ──
       const upcoming = pendingNextCandlePrediction || lastSignal;
       const sig = upcoming ? (upcoming.direction || upcoming.signal || 'WAIT') : 'WAIT';
       const labelText = sig === 'BUY' ? '🟢 BUY' : sig === 'SELL' ? '🔴 SELL' : '⏳ WAIT';
@@ -1726,14 +1826,14 @@
       if (predEl) {
         if (upcoming && sig !== 'WAIT') {
           const dirText = sig === 'BUY' ? 'UP 🟢 (CALL)' : 'DOWN 🔴 (PUT)';
-          predEl.textContent = `Next 1m candle (${nxtStr}) predicted ${dirText} (Starts at ${nxtStr}:00)`;
+          predEl.textContent = `Next ${(currentTimeframe || '1m').toUpperCase()} candle (${nxtStr}) predicted ${dirText} (Starts at ${nxtStr})`;
         } else {
           predEl.textContent = `Scanning market to predict next candle (${nxtStr})...`;
         }
       }
 
       if (expiryEl) {
-        expiryEl.innerHTML = `⏱️ DURATION: 1m (Starts in <b>${clockStr}</b> at ${nxtStr}:00)`;
+        expiryEl.innerHTML = `⏱️ DURATION: ${(currentTimeframe || '1m').toUpperCase()} (${tInfo.tfSec}s) (Starts in <b>${clockStr}</b> at ${nxtStr})`;
         expiryEl.style.background = 'rgba(0, 212, 255, 0.12)';
         expiryEl.style.borderColor = 'rgba(0, 212, 255, 0.3)';
         expiryEl.style.color = '#00d4ff';
@@ -2024,13 +2124,17 @@
       updateLockedOverlayDisplay();
       sendResponse({ ok: true, pair: currentPair });
       return true;
+    } else if (msg.type === 'SET_TIMEFRAME') {
+      const tf = (msg.timeframe || '1m').toLowerCase();
+      switchTimeframe(tf, true);
+      sendResponse({ ok: true, timeframe: currentTimeframe });
+      return true;
     } else if (msg.type === 'GET_CANDLE_PREDICTION_STATE') {
-      const now = Date.now();
-      const currentMinuteBucket = Math.floor(now / 60000) * 60000;
-      const secondsIntoMinute = Math.floor((now % 60000) / 1000);
-      const secondsLeftInCandle = 60 - secondsIntoMinute;
-      const currentMinStr = formatMinuteString(currentMinuteBucket);
-      const nextMinStr = formatMinuteString(currentMinuteBucket + 60000);
+      const tInfo = getCandleTimeRemaining();
+      const currentMinuteBucket = tInfo.bucket;
+      const secondsLeftInCandle = tInfo.secondsLeft;
+      const currentMinStr = tInfo.curMinStr;
+      const nextMinStr = tInfo.nextMinStr;
 
       const isCandleActive = Boolean(activeCandlePrediction && activeCandlePrediction.candleStartBucket === currentMinuteBucket);
       const curPred = isCandleActive ? activeCandlePrediction : (pendingNextCandlePrediction || lastSignal);
@@ -2055,12 +2159,11 @@
       return true;
     } else if (msg.type === 'FORCE_RESCAN_PAIR') {
       fetchSignalForActivePair(true, () => {
-        const now = Date.now();
-        const currentMinuteBucket = Math.floor(now / 60000) * 60000;
-        const secondsIntoMinute = Math.floor((now % 60000) / 1000);
-        const secondsLeftInCandle = 60 - secondsIntoMinute;
-        const currentMinStr = formatMinuteString(currentMinuteBucket);
-        const nextMinStr = formatMinuteString(currentMinuteBucket + 60000);
+        const tInfo = getCandleTimeRemaining();
+        const currentMinuteBucket = tInfo.bucket;
+        const secondsLeftInCandle = tInfo.secondsLeft;
+        const currentMinStr = tInfo.curMinStr;
+        const nextMinStr = tInfo.nextMinStr;
 
         const isCandleActive = Boolean(activeCandlePrediction && activeCandlePrediction.candleStartBucket === currentMinuteBucket);
         const curPred = isCandleActive ? activeCandlePrediction : (pendingNextCandlePrediction || lastSignal);

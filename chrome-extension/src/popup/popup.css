@@ -372,6 +372,36 @@ button:disabled {
 
 .version { color: #444; }
 
+/* Timeframe Buttons */
+.tf-btn {
+  flex: 1 1 calc(25% - 4px);
+  min-width: 36px;
+  padding: 5px 2px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #a0aec0;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s ease;
+}
+
+.tf-btn:hover {
+  background: rgba(0, 212, 255, 0.15);
+  color: #fff;
+  border-color: rgba(0, 212, 255, 0.4);
+}
+
+.tf-btn.active {
+  background: linear-gradient(135deg, #00d4ff, #0077ff);
+  color: #fff;
+  border-color: #00d4ff;
+  box-shadow: 0 0 8px rgba(0, 212, 255, 0.4);
+  font-weight: 800;
+}
+
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.6; }
