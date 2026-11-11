@@ -224,7 +224,19 @@ def test_candlestick_pattern_recognizer():
     assert p_tws['pattern_name'] == 'Three White Soldiers'
     assert p_tws['direction'] == 'BULLISH'
 
-    # 4. Predict endpoint returns detected_pattern
+    # 4. Bulkowski #1 Ranked Pattern: Bullish Three Line Strike
+    strike_candles = [
+        {'open': 1.1060, 'high': 1.1065, 'low': 1.1038, 'close': 1.1040},  # Bear 1
+        {'open': 1.1040, 'high': 1.1042, 'low': 1.1018, 'close': 1.1020},  # Bear 2
+        {'open': 1.1020, 'high': 1.1022, 'low': 1.0998, 'close': 1.1000},  # Bear 3
+        {'open': 1.0999, 'high': 1.1070, 'low': 1.0995, 'close': 1.1068}   # Mega Bull Strike
+    ]
+    p_strike = detect_candlestick_pattern(strike_candles)
+    assert 'Three Line Strike' in p_strike['pattern_name']
+    assert p_strike['direction'] == 'BULLISH'
+    assert p_strike['reliability'] == 'VERY HIGH'
+
+    # 5. Predict endpoint returns detected_pattern
     candles = make_sample_candles(80)
     resp = client.post('/api/predict', json={
         'candles': candles,

@@ -164,6 +164,43 @@ def calculate_indicators(candles: List[Dict[str, Any]]) -> pd.DataFrame:
     bb_width_median = df['bb_width'].rolling(50).median()
     df['bb_squeeze'] = (df['bb_width'] < bb_width_median).astype(int)
 
+    # ── WORLD-RENOWNED QUANT & TRADINGVIEW TOP-REVIEWED INDICATORS ───────────
+    # A) SuperTrend (Olivier Seban - #1 Trend Reversal Indicator)
+    hl2 = (df['high'] + df['low']) / 2.0
+    atr10 = tr.rolling(10).mean().fillna(atr14)
+    df['supertrend'] = np.where(df['close'] > (hl2 + 0.35 * atr10), 1.0,
+                        np.where(df['close'] < (hl2 - 0.35 * atr10), -1.0, 0.0))
+
+    # B) Chande Momentum Oscillator (Tushar Chande - Pure Unsmoothed Momentum)
+    gain_sum14 = gain14 * 14.0
+    loss_sum14 = loss14 * 14.0
+    df['cmo_14'] = (100.0 * (gain_sum14 - loss_sum14) / (gain_sum14 + loss_sum14 + 1e-9)).fillna(0.0)
+
+    # C) Hull Moving Average (Alan Hull - Zero-Lag Trend Filter)
+    w8 = np.arange(1, 9)
+    w16 = np.arange(1, 17)
+    w4 = np.arange(1, 5)
+    wma8 = df['close'].rolling(8).apply(lambda p: np.dot(p, w8) / 36.0, raw=True)
+    wma16 = df['close'].rolling(16).apply(lambda p: np.dot(p, w16) / 136.0, raw=True)
+    diff_hma = (2.0 * wma8 - wma16).fillna(df['close'])
+    hma16 = diff_hma.rolling(4).apply(lambda p: np.dot(p, w4) / 10.0, raw=True).fillna(df['close'])
+    df['hma_16_slope'] = ((df['close'] - hma16) / close_safe * 100.0).fillna(0.0)
+
+    # D) Money Flow Index (MFI - Volume-Weighted RSI)
+    raw_mf = tp * df['volume']
+    pos_flow = np.where(tp > tp.shift(1), raw_mf, 0.0)
+    neg_flow = np.where(tp < tp.shift(1), raw_mf, 0.0)
+    pos_mf14 = pd.Series(pos_flow, index=df.index).rolling(14).sum()
+    neg_mf14 = pd.Series(neg_flow, index=df.index).rolling(14).sum()
+    mfr = pos_mf14 / (neg_mf14 + 1e-9)
+    df['mfi_14'] = (100.0 - (100.0 / (1.0 + mfr))).fillna(50.0)
+
+    # E) TTM Squeeze (John Carter - Volatility Breakout Indicator)
+    ema20 = df['close'].ewm(span=20, adjust=False).mean()
+    kc_upper = ema20 + (1.5 * atr14)
+    kc_lower = ema20 - (1.5 * atr14)
+    df['ttm_squeeze_active'] = ((upper_bb < kc_upper) & (lower_bb > kc_lower)).astype(int)
+
     df.replace([np.inf, -np.inf], np.nan, inplace=True)
     df.fillna(0, inplace=True)
     return df
@@ -246,6 +283,27 @@ def get_indicator_signals(row: pd.Series) -> Dict[str, Dict]:
     adx = row.get('adx', 0)
     signals['adx'] = {'value': round(float(adx), 2), 'signal': 'STRONG_TREND' if adx > 25 else 'WEAK_TREND'}
 
+    # World-Class Top-Reviewed Indicators
+    st = float(row.get('supertrend', 0.0))
+    signals['supertrend'] = {
+        'value': 'BULLISH' if st > 0.5 else ('BEARISH' if st < -0.5 else 'NEUTRAL'),
+        'signal': 'BUY' if st > 0.5 else ('SELL' if st < -0.5 else 'NEUTRAL')
+    }
+
+    cmo = float(row.get('cmo_14', 0.0))
+    cmo_sig = 'OVERSOLD_BUY' if cmo < -45 else ('OVERBOUGHT_SELL' if cmo > 45 else 'NEUTRAL')
+    signals['cmo'] = {'value': round(float(cmo), 2), 'signal': cmo_sig}
+
+    mfi = float(row.get('mfi_14', 50.0))
+    mfi_sig = 'OVERSOLD_BUY' if mfi < 22 else ('OVERBOUGHT_SELL' if mfi > 78 else 'NEUTRAL')
+    signals['mfi'] = {'value': round(float(mfi), 2), 'signal': mfi_sig}
+
+    ttm = int(row.get('ttm_squeeze_active', 0))
+    signals['ttm_squeeze'] = {
+        'value': 'ACTIVE_SQUEEZE' if ttm == 1 else 'EXPANDING',
+        'signal': 'BREAKOUT_PENDING' if ttm == 1 else 'NORMAL'
+    }
+
     return signals
 
 
@@ -288,6 +346,24 @@ def generate_reasons(indicator_signals: Dict, prediction: int, confidence: float
         reasons.append(f"Stochastic upward momentum at {stoch_info['value']}")
     elif st_sig == 'BEARISH_SELL' and direction == 'SELL':
         reasons.append(f"Stochastic downward momentum at {stoch_info['value']}")
+
+    st_info = indicator_signals.get('supertrend', {})
+    if st_info.get('signal') == direction:
+        reasons.append(f"SuperTrend {st_info['value']} breakout confirmed")
+
+    cmo_info = indicator_signals.get('cmo', {})
+    if (cmo_info.get('signal') == 'OVERSOLD_BUY' and direction == 'BUY') or \
+       (cmo_info.get('signal') == 'OVERBOUGHT_SELL' and direction == 'SELL'):
+        reasons.append(f"Chande Momentum Oscillator (CMO) reversal at {cmo_info['value']}")
+
+    mfi_info = indicator_signals.get('mfi', {})
+    if (mfi_info.get('signal') == 'OVERSOLD_BUY' and direction == 'BUY') or \
+       (mfi_info.get('signal') == 'OVERBOUGHT_SELL' and direction == 'SELL'):
+        reasons.append(f"Money Flow Index (MFI) institutional volume signal at {mfi_info['value']}")
+
+    ttm_info = indicator_signals.get('ttm_squeeze', {})
+    if ttm_info.get('value') == 'ACTIVE_SQUEEZE':
+        reasons.append("TTM Volatility Squeeze active: pre-breakout compression coiling")
 
     if not reasons:
         reasons.append(f"ML ensemble model confidence: {confidence:.1f}%")

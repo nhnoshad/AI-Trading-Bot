@@ -197,6 +197,31 @@ class TradingPredictor:
             else:
                 sell_pts += 0.7
 
+        # ── World-Famous Indicators Integration ──────────────────────────────
+        st_val = float(row.get('supertrend', 0))
+        if st_val > 0.5:
+            buy_pts += 1.0
+        elif st_val < -0.5:
+            sell_pts += 1.0
+
+        cmo_val = float(row.get('cmo_14', 0))
+        if cmo_val < -45:
+            buy_pts += 1.0
+        elif cmo_val > 45:
+            sell_pts += 1.0
+
+        mfi_val = float(row.get('mfi_14', 50))
+        if mfi_val < 22:
+            buy_pts += 1.2
+        elif mfi_val > 78:
+            sell_pts += 1.2
+
+        hma_val = float(row.get('hma_16_slope', 0))
+        if hma_val > 0.04:
+            buy_pts += 0.8
+        elif hma_val < -0.04:
+            sell_pts += 0.8
+
         total = buy_pts + sell_pts + 1e-9
         diff = abs(buy_pts - sell_pts)
         if diff < 1.0:

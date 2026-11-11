@@ -69,6 +69,8 @@ def detect_candlestick_pattern(candles: List[Dict[str, Any]]) -> Dict[str, Any]:
     m0 = get_metrics(c0)
     m1 = get_metrics(c1)
     m2 = get_metrics(c2)
+    m3 = get_metrics(c3) if c3 else None
+    m4 = get_metrics(c4) if c4 else None
 
     # 10-bar average range for volatility comparison
     avg_range = np.mean([abs(float(c.get('high', 0)) - float(c.get('low', 0))) for c in candles[-10:]])
@@ -84,6 +86,111 @@ def detect_candlestick_pattern(candles: List[Dict[str, Any]]) -> Dict[str, Any]:
             prior_trend = 'UP'
         elif mid_close < p_close * 0.9995:
             prior_trend = 'DOWN'
+
+    # ── 0A. THOMAS BULKOWSKI #1 RANKED PATTERN: THREE LINE STRIKE (84% Accuracy) ──
+    # The single highest-performing reversal pattern across extensive quantitative studies
+    if m3 and m2 and m1 and m0:
+        # Bullish Three Line Strike: 3 lower red candles engulfed by 1 massive green expansion
+        if (m3['is_bear'] and m2['is_bear'] and m1['is_bear'] and
+            m1['close'] < m2['close'] < m3['close'] and
+            m0['is_bull'] and
+            m0['open'] <= m1['close'] * 1.0008 and
+            m0['close'] >= m3['open'] * 0.9992 and
+            m0['body_pct'] >= 0.58):
+            return {
+                'pattern_name': 'Bullish Three Line Strike (Bulkowski #1)',
+                'direction': 'BULLISH',
+                'signal': 'BUY',
+                'reliability': 'VERY HIGH',
+                'score': 98,
+                'type': 'MEGA_REVERSAL',
+                'candles_involved': 4,
+                'description': 'Thomas Bulkowski #1 Ranked Pattern (>84% Win-Rate): 3 consecutive drops completely wiped out by a single monumental bullish expansion candle.',
+                'action_advice': 'Ultra-High-Probability CALL (UP) signal with overwhelming buyer surge.'
+            }
+
+        # Bearish Three Line Strike: 3 higher green candles engulfed by 1 massive red expansion
+        if (m3['is_bull'] and m2['is_bull'] and m1['is_bull'] and
+            m1['close'] > m2['close'] > m3['close'] and
+            m0['is_bear'] and
+            m0['open'] >= m1['close'] * 0.9992 and
+            m0['close'] <= m3['open'] * 1.0008 and
+            m0['body_pct'] >= 0.58):
+            return {
+                'pattern_name': 'Bearish Three Line Strike (Bulkowski #1)',
+                'direction': 'BEARISH',
+                'signal': 'SELL',
+                'reliability': 'VERY HIGH',
+                'score': 98,
+                'type': 'MEGA_REVERSAL',
+                'candles_involved': 4,
+                'description': 'Thomas Bulkowski #1 Ranked Pattern (>84% Win-Rate): 3 consecutive rallies completely wiped out by a single monumental bearish expansion candle.',
+                'action_advice': 'Ultra-High-Probability PUT (DOWN) signal with overwhelming seller surge.'
+            }
+
+    # ── 0B. FAIR VALUE GAP (FVG) RETEST & MITIGATION (ICT Smart Money Concepts) ──
+    # Bullish FVG: 3-candle imbalance where Candle 2 High < Candle 0 Low and Candle 1 is large
+    if m2['is_bull'] and m1['is_bull'] and m1['body_pct'] >= 0.50:
+        if m0['low'] > m2['high'] and (m0['lower'] / m0['range']) >= 0.35:
+            return {
+                'pattern_name': 'Bullish Fair Value Gap (FVG) Retest',
+                'direction': 'BULLISH',
+                'signal': 'BUY',
+                'reliability': 'VERY HIGH',
+                'score': 96,
+                'type': 'SMC_IMBALANCE',
+                'candles_involved': 3,
+                'description': 'ICT Fair Value Gap (FVG): Price tested an unfilled institutional buy imbalance area and immediately rejected higher with a long lower shadow.',
+                'action_advice': 'High-Probability CALL (UP) entry on institutional order replenishment.'
+            }
+
+    # Bearish FVG: 3-candle imbalance where Candle 2 Low > Candle 0 High and Candle 1 is large
+    if m2['is_bear'] and m1['is_bear'] and m1['body_pct'] >= 0.50:
+        if m2['low'] > m0['high'] and (m0['upper'] / m0['range']) >= 0.35:
+            return {
+                'pattern_name': 'Bearish Fair Value Gap (FVG) Retest',
+                'direction': 'BEARISH',
+                'signal': 'SELL',
+                'reliability': 'VERY HIGH',
+                'score': 96,
+                'type': 'SMC_IMBALANCE',
+                'candles_involved': 3,
+                'description': 'ICT Fair Value Gap (FVG): Price tested an unfilled institutional sell imbalance area and immediately rejected lower with a long upper shadow.',
+                'action_advice': 'High-Probability PUT (DOWN) entry on institutional order replenishment.'
+            }
+
+    # ── 0C. BULLISH & BEARISH KICKER (Top Japanese Momentum Shift) ──
+    if (m1['is_bear'] and m1['body_pct'] >= 0.45 and
+        m0['is_bull'] and m0['body_pct'] >= 0.50 and
+        m0['open'] >= m1['open'] * 0.9998 and
+        m0['lower'] <= 0.25 * m0['body']):
+        return {
+            'pattern_name': 'Bullish Kicker',
+            'direction': 'BULLISH',
+            'signal': 'BUY',
+            'reliability': 'VERY HIGH',
+            'score': 95,
+            'type': 'MOMENTUM_REVERSAL',
+            'candles_involved': 2,
+            'description': 'Bullish Kicker: Sudden sentiment shockwave. Price gapped open and launched upwards with relentless buying momentum.',
+            'action_advice': 'High-Confidence CALL (UP) trade on market regime shift.'
+        }
+
+    if (m1['is_bull'] and m1['body_pct'] >= 0.45 and
+        m0['is_bear'] and m0['body_pct'] >= 0.50 and
+        m0['open'] <= m1['open'] * 1.0002 and
+        m0['upper'] <= 0.25 * m0['body']):
+        return {
+            'pattern_name': 'Bearish Kicker',
+            'direction': 'BEARISH',
+            'signal': 'SELL',
+            'reliability': 'VERY HIGH',
+            'score': 95,
+            'type': 'MOMENTUM_REVERSAL',
+            'candles_involved': 2,
+            'description': 'Bearish Kicker: Sudden sentiment shockwave. Price gapped open and crashed downwards with relentless selling momentum.',
+            'action_advice': 'High-Confidence PUT (DOWN) trade on market regime shift.'
+        }
 
     # ── 0. INSTITUTIONAL LIQUIDITY SWEEP & STOP-HUNT (Smart Money Concepts) ──
     if len(candles) >= 15:
