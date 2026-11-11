@@ -39,6 +39,7 @@ class TradingPredictor:
         self.cb_model = None
         self.rf_model = None
         self.mlp_model = None
+        self.meta_model = None
         self.scaler = None
         self.model_version = settings.MODEL_VERSION
         self.confidence_threshold = 0.68   # Raised to 0.68 (68%) for Elite Quotex Sniping Filter
@@ -55,6 +56,7 @@ class TradingPredictor:
             cb_path = os.path.join(MODELS_DIR, 'cb_model.pkl')
             rf_path = os.path.join(MODELS_DIR, 'rf_model.pkl')
             mlp_path = os.path.join(MODELS_DIR, 'mlp_model.pkl')
+            meta_model_path = os.path.join(MODELS_DIR, 'meta_model.pkl')
             scaler_path = os.path.join(MODELS_DIR, 'scaler.pkl')
             meta_path = os.path.join(MODELS_DIR, 'model_meta.json')
 
@@ -73,6 +75,9 @@ class TradingPredictor:
             if os.path.exists(mlp_path):
                 self.mlp_model = joblib.load(mlp_path)
                 logger.info(f'Loaded Deep MLP model from {mlp_path}')
+            if os.path.exists(meta_model_path):
+                self.meta_model = joblib.load(meta_model_path)
+                logger.info(f'Loaded Stacking Meta-Model from {meta_model_path}')
             if os.path.exists(scaler_path):
                 self.scaler = joblib.load(scaler_path)
                 logger.info(f'Loaded scaler from {scaler_path}')
@@ -293,7 +298,18 @@ class TradingPredictor:
                     components.append((w_mlp, p_mlp))
 
                 tot_w = sum(w for w, _ in components)
-                ml_proba = sum(w * p for w, p in components) / tot_w
+                weighted_proba = sum(w * p for w, p in components) / tot_w
+
+                if self.meta_model is not None and self.cb_model is not None and self.mlp_model is not None:
+                    try:
+                        meta_features = np.array([[p_xgb[1], p_lgbm[1], p_cb[1], p_rf[1], p_mlp[1]]])
+                        meta_proba = self.meta_model.predict_proba(meta_features)[0]
+                        # 60% Stacking Meta-Learner + 40% Dynamic EMA Weighted Ensemble
+                        ml_proba = 0.60 * meta_proba + 0.40 * weighted_proba
+                    except Exception:
+                        ml_proba = weighted_proba
+                else:
+                    ml_proba = weighted_proba
             else:
                 ml_proba = self.model.predict_proba(features_scaled)[0]
 
@@ -319,14 +335,19 @@ class TradingPredictor:
                 is_unanimous = (ml_dir == 1 and votes_buy == n_models) or \
                                (ml_dir == 0 and votes_sell == n_models)
 
-                if is_deadlock or ensemble_std > 0.085:
-                    # Model disagreement: push toward WAIT to avoid coin flips
+                if is_deadlock:
+                    # Model deadlock: push toward WAIT to avoid coin flips
                     ml_conf = min(ml_conf, 0.58)
+                elif is_unanimous:
+                    # Unanimous consensus across all 5 architectures!
+                    ml_conf = min(0.97, ml_conf + 0.04)
                 elif not majority_agrees:
                     ml_conf = min(ml_conf, 0.61)
-                elif is_unanimous or ensemble_std <= 0.040:
-                    # Unanimous / strong consensus bonus across all 5 architectures
-                    ml_conf = min(0.97, ml_conf + 0.04)
+                elif ensemble_std > 0.16:
+                    # Wide dispersion and not unanimous
+                    ml_conf = min(ml_conf, 0.62)
+                elif ensemble_std <= 0.045:
+                    ml_conf = min(0.97, ml_conf + 0.03)
 
             # ── ADX-aware trend gate ──────────────────────────────────────────────────
             adx_val = float(latest_row.get('adx', 0))
@@ -463,12 +484,14 @@ class TradingPredictor:
 
         # 5. Dynamic Volatility-Adaptive Confidence Gate
         base_threshold = min_confidence_override if min_confidence_override is not None else self.confidence_threshold
-        if q_regime == 'CHOPPY_SIDEWAYS' or q_memory == 'RANDOM_WALK_NOISE':
+        if min_confidence_override is not None:
+            adaptive_threshold = min_confidence_override
+        elif q_regime == 'CHOPPY_SIDEWAYS' or q_memory == 'RANDOM_WALK_NOISE':
             # In choppy noise, demand at least 78% certainty
             adaptive_threshold = max(0.78, base_threshold + 0.08)
         elif (prediction == 1 and mtf_trend == 'BULLISH') or (prediction == 0 and mtf_trend == 'BEARISH'):
-            # In confirmed multi-timeframe trend, allow 68%+
-            adaptive_threshold = max(0.68, base_threshold - 0.02)
+            # In confirmed multi-timeframe trend, allow 65%+
+            adaptive_threshold = max(0.65, base_threshold - 0.02)
         elif q_exhaustion:
             adaptive_threshold = max(0.72, base_threshold)
         else:

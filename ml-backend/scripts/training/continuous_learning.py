@@ -163,7 +163,7 @@ def retrain_and_deploy(X, y) -> dict:
     X_test_s = scaler.transform(X_test)
 
     logger.info('Training new models...')
-    new_ensemble, _, _, _ = train_models(X_train_s, y_train)
+    new_ensemble, *other_models = train_models(X_train_s, y_train)
     new_acc = accuracy_score(y_test, new_ensemble.predict(X_test_s))
     logger.info(f'New ensemble accuracy: {new_acc:.4f}')
 
