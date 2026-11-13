@@ -2065,7 +2065,7 @@
   function updateOverlayMode(mode) {
     if (!overlayElement) return;
     const el = overlayElement.querySelector('#ov-ai-badge');
-    if (el) el.textContent = '🧠 AUTO LEARNING';
+    if (el) el.textContent = '🧠 ADAPTIVE LEARNING';
   }
 
   function updateOverlayRunningState(running) {

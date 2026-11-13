@@ -223,7 +223,7 @@ async def log_trade(request: LogTradeRequest, db: Session = Depends(get_db)):
         exit_price=request.exit_price,
         result=request.result,
         pnl=calc_pnl,
-        mode=request.mode
+        mode='MANUAL'  # Strictly MANUAL — Auto trading is permanently disabled
     )
     db.add(trade)
     db.commit()

@@ -30,9 +30,9 @@
     "ema_acc": 0.54
   },
   "NZD/USD (OTC)": {
-    "wins": 1,
-    "total": 3,
-    "ema_acc": 0.5274
+    "wins": 4,
+    "total": 8,
+    "ema_acc": 0.5309
   },
   "CAD/JPY": {
     "wins": 1,
@@ -45,8 +45,8 @@
     "ema_acc": 0.6628
   },
   "EUR/GBP": {
-    "wins": 7,
-    "total": 14,
-    "ema_acc": 0.437
+    "wins": 8,
+    "total": 16,
+    "ema_acc": 0.454
   }
 }

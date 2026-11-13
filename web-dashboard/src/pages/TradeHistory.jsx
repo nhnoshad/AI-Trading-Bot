@@ -25,7 +25,7 @@ export default function TradeHistory() {
         duration: 60,
         result: i % 3 === 0 ? 'LOSS' : 'WIN',
         pnl: i % 3 === 0 ? -10 : 8.5,
-        mode: i % 4 === 0 ? 'AUTO' : 'MANUAL'
+        mode: i % 4 === 0 ? 'PREDICTION' : 'MANUAL'
       }))
       setTrades(mock)
     }
@@ -92,7 +92,7 @@ export default function TradeHistory() {
           onChange={e => setFilter(f => ({ ...f, mode: e.target.value }))}
         >
           <option value="ALL">All Modes</option>
-          <option value="AUTO">Auto</option>
+          <option value="PREDICTION">Prediction</option>
           <option value="MANUAL">Manual</option>
         </select>
         <span className="ml-auto text-xs text-gray-500 self-center">{filtered.length} trades</span>

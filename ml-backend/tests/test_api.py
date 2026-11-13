@@ -83,7 +83,7 @@ def test_predict_and_outcome_learning_cycle():
         'entry_price': pred['entry_price'],
         'exit_price': pred['entry_price'] + 0.0005,
         'result': 'WIN',
-        'mode': 'AUTO'
+        'mode': 'MANUAL'
     })
     assert trade_resp.status_code == 200
     t_data = trade_resp.json()
