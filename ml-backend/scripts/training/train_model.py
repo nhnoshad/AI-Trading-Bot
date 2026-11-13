@@ -56,13 +56,12 @@ def load_and_process_data(csv_path: str) -> tuple:
     if has_base_features:
         print('Using pre-calculated technical indicator features from dataset...')
         df_features = df.copy()
-        # For the 5 new features not yet in older CSV, fill with 0 as neutral placeholder
-        new_features = ['volume_sma_ratio', 'rsi_slope_3', 'price_momentum_10',
-                        'candle_directionality', 'bb_squeeze']
-        for nf in new_features:
+        # For any new features not yet in older CSV, fill with 0 as neutral placeholder
+        # This includes v2 (5 features) and v3 elite (5 features) additions
+        for nf in FEATURE_COLUMNS:
             if nf not in df_features.columns:
                 df_features[nf] = 0.0
-                print(f'  [info] New feature "{nf}" not in CSV — filled with 0 (neutral). Re-collect live data to include it.')
+                print(f'  [info] New feature "{nf}" not in CSV — filled with 0. Re-collect live data to include it.')
     else:
         # Calculate indicators from raw OHLCV
         print('Calculating technical indicators from OHLCV candles...')
@@ -222,8 +221,7 @@ def train_models(X_train, y_train, sample_weight=None):
             learning_rate_init=0.002,
             max_iter=300,
             warm_start=False,
-            early_stopping=True,
-            validation_fraction=0.15,
+            early_stopping=False,
             random_state=42
         )
         mlp.fit(X_train, y_train)

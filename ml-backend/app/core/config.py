@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings
+from pydantic import ConfigDict
 from typing import Optional
 import os
 
@@ -6,6 +7,8 @@ BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
 DEFAULT_DB_PATH = os.path.join(BASE_DIR, 'trading_bot.db').replace('\\', '/')
 
 class Settings(BaseSettings):
+    model_config = ConfigDict(env_file='.env', case_sensitive=True)
+
     # Server
     HOST: str = '0.0.0.0'
     PORT: int = 8000
@@ -39,9 +42,5 @@ class Settings(BaseSettings):
     # Retraining
     RETRAIN_INTERVAL_DAYS: int = 7
     MIN_ACCURACY_THRESHOLD: float = 0.52
-
-    class Config:
-        env_file = '.env'
-        case_sensitive = True
 
 settings = Settings()

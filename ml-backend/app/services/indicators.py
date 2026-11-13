@@ -206,22 +206,63 @@ def calculate_indicators(candles: List[Dict[str, Any]]) -> pd.DataFrame:
     kc_lower = ema20 - (1.5 * atr14)
     df['ttm_squeeze_active'] = ((upper_bb < kc_upper) & (lower_bb > kc_lower)).astype(int)
 
+    # ── ELITE UPGRADE: 5 New World-Class Indicators ──────────────────────────
+
+    # F) Vortex Indicator (Etienne Botes & Douglas Siepman)
+    # Measures trend direction: VI+ > VI- = Bullish; VI- > VI+ = Bearish
+    # One of the top-rated directional indicators on TradingView
+    high_low = (df['high'] - df['low']).abs()
+    high_prev_close = (df['high'] - df['close'].shift(1)).abs()
+    low_prev_close = (df['low'] - df['close'].shift(1)).abs()
+    tr_vortex = pd.concat([high_low, high_prev_close, low_prev_close], axis=1).max(axis=1)
+    vm_plus = (df['high'] - df['low'].shift(1)).abs()
+    vm_minus = (df['low'] - df['high'].shift(1)).abs()
+    vi_plus = vm_plus.rolling(14).sum() / (tr_vortex.rolling(14).sum() + 1e-9)
+    vi_minus = vm_minus.rolling(14).sum() / (tr_vortex.rolling(14).sum() + 1e-9)
+    df['vortex_diff'] = (vi_plus - vi_minus).fillna(0.0)  # + = bullish, - = bearish
+
+    # G) TRIX (Triple Exponential Moving Average Oscillator)
+    # Filters out market noise by triple-smoothing — only catches genuine trend shifts
+    ema1 = df['close'].ewm(span=15, adjust=False).mean()
+    ema2 = ema1.ewm(span=15, adjust=False).mean()
+    ema3 = ema2.ewm(span=15, adjust=False).mean()
+    df['trix_15'] = ema3.pct_change(1).fillna(0.0) * 100.0  # Rate of change of triple EMA
+
+    # H) Detrended Price Oscillator (DPO)
+    # Removes long-term trend to reveal short-term cycles — excellent for binary options timing
+    dpo_period = 14
+    dpo_shift = dpo_period // 2 + 1
+    sma_dpo = df['close'].rolling(dpo_period).mean().shift(dpo_shift)
+    df['dpo_14'] = ((df['close'] - sma_dpo) / (close_safe + 1e-9) * 100.0).fillna(0.0)
+
+    # I) Candle Cluster Score (original Quotex-tuned)
+    # Scores the last 5 candles' directional consistency (0-5 fully aligned = trend continuation)
+    direction_series = (df['close'] > df['open']).astype(int)
+    df['candle_cluster_bull'] = direction_series.rolling(5).sum().fillna(0.0)  # 5=all bull, 0=all bear
+
+    # J) Price Velocity (Rate of Acceleration)
+    # Second derivative of price: positive = accelerating up, negative = accelerating down
+    df['price_velocity'] = df['close'].diff(1).diff(1).fillna(0.0) / (close_safe * 0.001 + 1e-9)
+    df['price_velocity'] = df['price_velocity'].clip(-5.0, 5.0)
+
     df.replace([np.inf, -np.inf], np.nan, inplace=True)
     df.fillna(0, inplace=True)
     return df
 
 
 FEATURE_COLUMNS = [
-    # Original 28 indicators
+    # Core 28 indicators
     'rsi_14', 'rsi_7', 'stoch_k', 'stoch_d', 'williams_r', 'cci',
     'ema_9', 'ema_21', 'sma_50', 'macd_line', 'macd_signal', 'macd_hist',
     'ema_cross', 'adx', 'bb_width', 'bb_position', 'atr_14',
     'price_change_1', 'price_change_3', 'price_change_5', 'candle_body_ratio',
     'body_size', 'upper_wick', 'lower_wick', 'is_doji', 'is_hammer',
     'is_engulfing', 'consecutive_same_direction',
-    # 5 new advanced features (v2 — accuracy upgrade)
+    # v2 advanced features (5 — accuracy upgrade)
     'volume_sma_ratio', 'rsi_slope_3', 'price_momentum_10',
     'candle_directionality', 'bb_squeeze',
+    # v3 world-class elite indicators (5 new — elite upgrade)
+    'vortex_diff', 'trix_15', 'dpo_14', 'candle_cluster_bull', 'price_velocity',
 ]
 
 
@@ -309,6 +350,37 @@ def get_indicator_signals(row: pd.Series) -> Dict[str, Dict]:
         'signal': 'BREAKOUT_PENDING' if ttm == 1 else 'NORMAL'
     }
 
+    # ── Elite v3 Indicator Signals ────────────────────────────────────────────
+    vortex = float(row.get('vortex_diff', 0.0))
+    signals['vortex'] = {
+        'value': round(vortex, 4),
+        'signal': 'BUY' if vortex > 0.08 else ('SELL' if vortex < -0.08 else 'NEUTRAL')
+    }
+
+    trix = float(row.get('trix_15', 0.0))
+    signals['trix'] = {
+        'value': round(trix, 4),
+        'signal': 'BUY' if trix > 0 else 'SELL'
+    }
+
+    dpo = float(row.get('dpo_14', 0.0))
+    signals['dpo'] = {
+        'value': round(dpo, 3),
+        'signal': 'BUY' if dpo > 0.05 else ('SELL' if dpo < -0.05 else 'NEUTRAL')
+    }
+
+    cluster = float(row.get('candle_cluster_bull', 2.5))
+    signals['candle_cluster'] = {
+        'value': round(cluster, 0),
+        'signal': 'BUY' if cluster >= 4 else ('SELL' if cluster <= 1 else 'NEUTRAL')
+    }
+
+    velocity = float(row.get('price_velocity', 0.0))
+    signals['price_velocity'] = {
+        'value': round(velocity, 3),
+        'signal': 'BUY' if velocity > 0.3 else ('SELL' if velocity < -0.3 else 'NEUTRAL')
+    }
+
     return signals
 
 
@@ -369,6 +441,24 @@ def generate_reasons(indicator_signals: Dict, prediction: int, confidence: float
     ttm_info = indicator_signals.get('ttm_squeeze', {})
     if ttm_info.get('value') == 'ACTIVE_SQUEEZE':
         reasons.append("TTM Volatility Squeeze active: pre-breakout compression coiling")
+
+    # v3 Elite Indicators
+    vortex_info = indicator_signals.get('vortex', {})
+    if vortex_info.get('signal') == direction:
+        reasons.append(f"Vortex Indicator confirms {direction} pressure (VI diff={vortex_info['value']})")
+
+    trix_info = indicator_signals.get('trix', {})
+    if trix_info.get('signal') == direction and abs(float(trix_info.get('value', 0))) > 0.0002:
+        reasons.append(f"TRIX triple-smoothed momentum → {direction} (zero-lag trend filter)")
+
+    cluster_info = indicator_signals.get('candle_cluster', {})
+    if cluster_info.get('signal') == direction:
+        n = int(cluster_info.get('value', 0))
+        reasons.append(f"Candle Cluster: {n}/5 candles aligned {'bullish' if direction == 'BUY' else 'bearish'} (momentum continuation)")
+
+    vel_info = indicator_signals.get('price_velocity', {})
+    if vel_info.get('signal') == direction:
+        reasons.append(f"Price Velocity acceleration confirms {direction} momentum")
 
     if not reasons:
         reasons.append(f"ML ensemble model confidence: {confidence:.1f}%")

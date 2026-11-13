@@ -8,7 +8,7 @@ import { useStore } from '../store/useStore'
 
 const navItems = [
   { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { path: '/history', icon: History, label: 'Trade History' },
+  { path: '/history', icon: History, label: 'Prediction History' },
   { path: '/backtest', icon: TestTube2, label: 'Backtesting' },
   { path: '/model', icon: Brain, label: 'AI Model' },
   { path: '/settings', icon: Settings, label: 'Settings' },

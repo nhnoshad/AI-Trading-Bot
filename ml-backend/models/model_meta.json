@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "trained_at": "2026-11-11T19:48:15.746957",
+  "trained_at": "2026-11-11T21:22:13.078573",
   "features": [
     "rsi_14",
     "rsi_7",
@@ -34,10 +34,15 @@
     "rsi_slope_3",
     "price_momentum_10",
     "candle_directionality",
-    "bb_squeeze"
+    "bb_squeeze",
+    "vortex_diff",
+    "trix_15",
+    "dpo_14",
+    "candle_cluster_bull",
+    "price_velocity"
   ],
-  "n_samples": 4034,
-  "train_size": 3227,
-  "test_size": 807,
-  "accuracy": 0.5489467162329615
+  "n_samples": 3435,
+  "train_size": 2748,
+  "test_size": 687,
+  "accuracy": 0.5589519650655022
 }

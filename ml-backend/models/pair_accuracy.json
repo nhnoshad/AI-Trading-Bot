@@ -1,0 +1,37 @@
+{
+  "EURUSD": {
+    "wins": 3,
+    "total": 3,
+    "ema_acc": 0.7084
+  },
+  "AUD/USD (OTC)": {
+    "wins": 1,
+    "total": 6,
+    "ema_acc": 0.3845
+  },
+  "USD/PHP (OTC)": {
+    "wins": 3,
+    "total": 3,
+    "ema_acc": 0.7084
+  },
+  "Dash (OTC)": {
+    "wins": 1,
+    "total": 1,
+    "ema_acc": 0.64
+  },
+  "USD/CAD (OTC)": {
+    "wins": 0,
+    "total": 10,
+    "ema_acc": 0.2093
+  },
+  "USD/EGP (OTC)": {
+    "wins": 0,
+    "total": 1,
+    "ema_acc": 0.54
+  },
+  "NZD/USD (OTC)": {
+    "wins": 1,
+    "total": 2,
+    "ema_acc": 0.586
+  }
+}

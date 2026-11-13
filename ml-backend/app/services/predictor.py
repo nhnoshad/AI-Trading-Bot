@@ -4,7 +4,7 @@ import json
 import joblib
 import numpy as np
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from app.services.indicators import (
     calculate_indicators, FEATURE_COLUMNS,
@@ -27,7 +27,7 @@ os.makedirs(PAIR_DATA_DIR, exist_ok=True)
 class TradingPredictor:
     """
     Core ML prediction engine for trading signals:
-    - Uses trained XGBoost + LightGBM + Random Forest ensemble + 28 technical indicators
+    - Uses trained XGBoost + LightGBM + CatBoost + Random Forest + MLP ensemble with 33 technical indicators
     - Supports pair-specific historical datasets (EUR/USD, GBP/USD, USD/JPY, OTC pairs, etc.)
     - Outputs decisive BUY, SELL, or WAIT signals based on model confidence & indicator agreement
     """
@@ -227,6 +227,37 @@ class TradingPredictor:
         elif hma_val < -0.04:
             sell_pts += 0.8
 
+        # ── v3 Elite Indicators (Vortex, TRIX, DPO, Candle Cluster, Velocity) ─
+        vortex_diff = float(row.get('vortex_diff', 0.0))
+        if vortex_diff > 0.08:
+            buy_pts += 1.2    # Strong bullish vortex — high reliability trend signal
+        elif vortex_diff < -0.08:
+            sell_pts += 1.2
+
+        trix = float(row.get('trix_15', 0.0))
+        if trix > 0.0001:
+            buy_pts += 0.9    # Triple-smoothed momentum is bullish
+        elif trix < -0.0001:
+            sell_pts += 0.9
+
+        dpo = float(row.get('dpo_14', 0.0))
+        if dpo > 0.05:
+            buy_pts += 0.7    # Price above detrended equilibrium — bullish cycle
+        elif dpo < -0.05:
+            sell_pts += 0.7
+
+        cluster = float(row.get('candle_cluster_bull', 2.5))
+        if cluster >= 4:
+            buy_pts += 1.0    # 4-5 bullish candles in a row — momentum continuation
+        elif cluster <= 1:
+            sell_pts += 1.0   # 0-1 bullish candles — bearish cluster
+
+        velocity = float(row.get('price_velocity', 0.0))
+        if velocity > 0.4:
+            buy_pts += 0.7    # Accelerating price movement upward
+        elif velocity < -0.4:
+            sell_pts += 0.7
+
         total = buy_pts + sell_pts + 1e-9
         diff = abs(buy_pts - sell_pts)
         if diff < 1.0:
@@ -247,8 +278,9 @@ class TradingPredictor:
         min_confidence: Optional[float] = None
     ) -> Dict[str, Any]:
         """
-        Analyzes the selected pair's candle data using all 33 technical indicators
-        and the trained ML ensemble, returning BUY, SELL, or WAIT.
+        Analyzes the selected pair's candle data using all 38 technical indicators
+        and the trained ML ensemble (XGBoost + LightGBM + CatBoost + RF + MLP),
+        returning BUY, SELL, or WAIT with per-pair smart loss streak protection.
         """
         if min_confidence_override is None and min_confidence is not None:
             min_confidence_override = min_confidence / 100.0 if min_confidence > 1 else min_confidence
@@ -260,6 +292,45 @@ class TradingPredictor:
         features_dict = {col: round(float(latest_row.get(col, 0.0)), 6) for col in FEATURE_COLUMNS}
         learner = get_adaptive_learner()
         weights = learner.weights
+
+        # ── Smart Loss Streak Protection: Per-Pair Cooldown Check ────────────
+        # If this pair has 3+ consecutive losses, force WAIT to protect capital
+        pair_conf_adj = learner.get_pair_confidence_adjustment(pair)
+        if pair_conf_adj <= -0.95:  # Cooldown active
+            secs_left = int(max(0, learner.pair_cooldown_until.get(pair, 0) - time.time()))
+            analysis_ms = round((time.perf_counter() - t0) * 1000, 2)
+            return {
+                'signal': 'WAIT',
+                'confidence': 54.0,
+                'strength': 'BLOCKED',
+                'entry_price': entry_price,
+                'pair': pair,
+                'timeframe': timeframe,
+                'dynamic_gate_threshold': 68.0,
+                'next_candle_summary': f'Smart Loss Streak Filter: {pair} in cooldown — {secs_left}s remaining',
+                'sniper_entry_advice': f'Capital Protection Mode: 3 consecutive losses detected — waiting {secs_left}s before re-engaging',
+                'epistemic_uncertainty': {'ensemble_std': 0.0, 'uncertainty_level': 'HIGH', 'unanimous_consensus': False},
+                'pattern': {'pattern_name': 'Normal Price Action', 'direction': 'NEUTRAL', 'type': 'NONE', 'reliability': 'LOW', 'action_advice': 'Wait'},
+                'detected_pattern': {'pattern_name': 'Normal Price Action', 'direction': 'NEUTRAL', 'type': 'NONE', 'reliability': 'LOW', 'action_advice': 'Wait'},
+                'quotex_dynamics': {},
+                'candles_analyzed': len(candles),
+                'history_hours': 0,
+                'analysis_ms': analysis_ms,
+                'indicators': {},
+                'features': features_dict,
+                'model_votes': {},
+                'ensemble_weights': weights,
+                'reasons': [
+                    f'🛡️ Smart Capital Protection: {pair} had 3+ consecutive losses',
+                    f'⏳ Cooldown active — resuming in {secs_left}s',
+                    'AI is recalibrating this pair before re-engaging'
+                ],
+                'recommended_duration': 60,
+                'current_candle': {'direction': 'NEUTRAL', 'change_pct': 0.0, 'achieved_position': 'Cooldown active'},
+                'next_candle_prediction': {'action': 'WAIT', 'direction': 'WAIT', 'duration_seconds': 60, 'duration_text': '1 min (60s)', 'summary': 'Cooldown active'},
+                'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
+                'model_version': self.model_version
+            }
 
         rule_dir, rule_conf = self._rule_based_score(latest_row)
         model_preds = {}
@@ -500,6 +571,12 @@ class TradingPredictor:
         confidence_pct = round(confidence_raw * 100, 2)
         threshold = adaptive_threshold
 
+        # ── Per-Pair Performance Adjustment ──────────────────────────────────
+        # Apply pair-specific confidence bonus/penalty based on recent accuracy
+        if pair_conf_adj != 0.0 and prediction != -1:
+            confidence_raw = max(0.48, min(0.98, confidence_raw + pair_conf_adj))
+            confidence_pct = round(confidence_raw * 100, 2)
+
         if prediction == -1 or confidence_raw < threshold:
             signal = 'WAIT'
             strength = 'WEAK'
@@ -570,7 +647,7 @@ class TradingPredictor:
         duration_text = f"{recommended_duration // 60} min ({recommended_duration}s)" if recommended_duration >= 60 else f"{recommended_duration}s"
 
         analysis_ms = round((time.perf_counter() - t0) * 1000, 2)
-        now_iso = datetime.utcnow().isoformat() + 'Z'
+        now_iso = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         self.last_prediction_time = now_iso
 
         uncertainty_level = 'LOW' if ensemble_std <= 0.05 else ('MEDIUM' if ensemble_std <= 0.08 else 'HIGH')

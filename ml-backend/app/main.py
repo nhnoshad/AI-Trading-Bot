@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, FileResponse
+from contextlib import asynccontextmanager
 import logging
 import os
 import sys
@@ -14,22 +15,6 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)]
 )
 logger = logging.getLogger(__name__)
-
-app = FastAPI(
-    title='AI Trading Signal Bot API',
-    description='ML-powered trading signal generator for binary options with 35-day continuous learning',
-    version='1.0.1',
-    docs_url='/docs',
-    redoc_url='/redoc'
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=['*'],
-    allow_credentials=True,
-    allow_methods=['*'],
-    allow_headers=['*'],
-)
 
 import threading
 from http.server import HTTPServer, SimpleHTTPRequestHandler
@@ -64,18 +49,37 @@ def _start_port_3000_server():
         logger.info('Port 3000 already in use; dashboard also available at http://localhost:8000/dashboard')
 
 
-@app.on_event('startup')
-async def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
     logger.info('Starting AI Trading Bot API...')
     init_db()
     from app.services.predictor import get_predictor
     get_predictor()
-
     # Start dashboard on port 3000
     t = threading.Thread(target=_start_port_3000_server, daemon=True)
     t.start()
     logger.info('API and Web Dashboard ready.')
+    yield
+    # Shutdown (nothing to clean up)
 
+
+app = FastAPI(
+    title='AI Trading Signal Bot API',
+    description='ML-powered trading signal generator for binary options with 35-day continuous learning',
+    version='1.0.2',
+    docs_url='/docs',
+    redoc_url='/redoc',
+    lifespan=lifespan
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=['*'],
+    allow_credentials=True,
+    allow_methods=['*'],
+    allow_headers=['*'],
+)
 
 app.include_router(router, prefix='/api')
 

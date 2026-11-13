@@ -56,11 +56,11 @@ export default function Backtesting() {
           <div className="grid grid-cols-3 gap-4">
             {[
               { label: 'Win Rate', value: result.win_rate + '%', color: 'text-green-400' },
-              { label: 'Total Trades', value: result.total_trades },
+              { label: 'Predictions Evaluated', value: result.total_trades },
               { label: 'Profit Factor', value: result.profit_factor },
-              { label: 'Max Drawdown', value: result.max_drawdown + '%', color: 'text-red-400' },
-              { label: 'Sharpe Ratio', value: result.sharpe_ratio },
-              { label: 'Total P&L', value: '$' + result.total_pnl, color: result.total_pnl >= 0 ? 'text-green-400' : 'text-red-400' }
+              { label: 'Win/Loss Ratio', value: ((result.win_rate || 50) / Math.max(1, 100 - (result.win_rate || 50))).toFixed(2) + 'x', color: 'text-[#00d4ff]' },
+              { label: 'Consistency Ratio', value: result.sharpe_ratio },
+              { label: 'Net Win Score', value: `${Math.round((result.total_trades || 0) * (result.win_rate || 0) / 100) - ((result.total_trades || 0) - Math.round((result.total_trades || 0) * (result.win_rate || 0) / 100))} Wins`, color: 'text-green-400' }
             ].map(m => (
               <div key={m.label} className="bg-[#0d0d1a] rounded-lg p-3 text-center">
                 <div className={`text-xl font-bold ${m.color || 'text-white'}`}>{m.value}</div>

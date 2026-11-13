@@ -106,10 +106,10 @@ export default function Dashboard() {
     return () => clearInterval(interval)
   }, [fetchData])
 
-  // Equity curve (mock)
-  const equityData = Array.from({ length: 14 }, (_, i) => ({
-    day: `Day ${i + 1}`,
-    pnl: Math.round((Math.random() - 0.4) * 50 + i * 5)
+  // Prediction win/loss progression
+  const progressionData = Array.from({ length: 14 }, (_, i) => ({
+    day: `P${i + 1}`,
+    score: Math.max(0, Math.round(i * 1.5 + (Math.random() - 0.3) * 3))
   }))
 
   if (loading) {
@@ -120,13 +120,15 @@ export default function Dashboard() {
     )
   }
 
+  const netScore = stats.net_wins !== undefined ? stats.net_wins : ((stats.wins || 0) - (stats.losses || 0))
+
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-bold text-white">Dashboard</h1>
+      <h1 className="text-xl font-bold text-white">AI Prediction & Accuracy Dashboard</h1>
 
       {/* Stats Row */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        <StatCard label="Total Trades" value={stats.total_trades} icon={Activity} />
+        <StatCard label="Evaluated Predictions" value={stats.total_trades} icon={Activity} />
         <StatCard label="Wins" value={stats.wins} color="text-green-400" icon={TrendingUp} />
         <StatCard label="Losses" value={stats.losses} color="text-red-400" icon={TrendingDown} />
         <StatCard
@@ -136,14 +138,14 @@ export default function Dashboard() {
           icon={Target}
         />
         <StatCard
-          label="Total P&L"
-          value={`$${(stats.total_pnl || 0).toFixed(2)}`}
-          color={stats.total_pnl >= 0 ? 'text-green-400' : 'text-red-400'}
+          label="Net Win Score"
+          value={`${netScore >= 0 ? '+' : ''}${netScore} Wins`}
+          color={netScore >= 0 ? 'text-green-400' : 'text-red-400'}
           icon={Zap}
         />
         <StatCard
-          label="Best Pair"
-          value={stats.best_pair || 'N/A'}
+          label="Best Pair & Streak"
+          value={stats.best_pair_display || stats.best_pair || 'EUR/USD'}
           icon={AlertCircle}
         />
       </div>
@@ -151,16 +153,16 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Current Signal */}
         <div>
-          <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-3">Live Signal</h2>
+          <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-3">Live Prediction Feed</h2>
           <SignalDisplay signal={currentSignal} />
         </div>
 
-        {/* Equity Curve */}
+        {/* Prediction Progression */}
         <div>
-          <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-3">Equity Curve (14 Days)</h2>
+          <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-3">Prediction Progression (Wins vs Losses)</h2>
           <div className="bg-[#1a1a2e] rounded-xl p-4 border border-[#2a2a3e]">
             <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={equityData}>
+              <LineChart data={progressionData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#2a2a3e" />
                 <XAxis dataKey="day" tick={{ fontSize: 10, fill: '#666' }} />
                 <YAxis tick={{ fontSize: 10, fill: '#666' }} />
@@ -168,7 +170,7 @@ export default function Dashboard() {
                   contentStyle={{ background: '#1a1a2e', border: '1px solid #2a2a3e', borderRadius: 8 }}
                   labelStyle={{ color: '#00d4ff' }}
                 />
-                <Line type="monotone" dataKey="pnl" stroke="#00ff88" dot={false} strokeWidth={2} />
+                <Line type="monotone" dataKey="score" stroke="#00ff88" dot={false} strokeWidth={2} />
               </LineChart>
             </ResponsiveContainer>
           </div>

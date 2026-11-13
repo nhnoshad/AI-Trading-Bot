@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 import json
 import os
 import logging
@@ -59,7 +59,7 @@ class LogTradeRequest(BaseModel):
     duration: int = 60
     entry_price: float
     exit_price: Optional[float] = None
-    result: Optional[str] = 'WIN'  # WIN / LOSS / PENDING
+    result: Optional[str] = 'PENDING'  # WIN / LOSS / PENDING
     pnl: Optional[float] = None
     mode: str = 'MANUAL'  # AUTO / MANUAL
 
@@ -100,7 +100,7 @@ async def predict(request: PredictRequest, db: Session = Depends(get_db)):
         # This ensures the signal's candle has COMPLETELY closed before comparing prices.
         # Using 30s was wrong: a signal from 30s ago is still inside the same open candle,
         # so current_close ≈ entry_price → nearly always recorded as WIN regardless of reality.
-        cutoff_verify = datetime.utcnow() - timedelta(seconds=65)
+        cutoff_verify = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=65)
         matured_signals = (
             db.query(Signal)
             .filter(
@@ -187,7 +187,7 @@ async def health(db: Session = Depends(get_db)):
             'rf': learner.weights.get('rf', 0.16),
             'mlp': learner.weights.get('mlp', 0.18)
         },
-        'timestamp': datetime.utcnow().isoformat() + 'Z'
+        'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
     }
 
 
@@ -417,12 +417,15 @@ async def get_stats(db: Session = Depends(get_db)):
     # Build equity curve from trades
     equity_curve = []
     running_pnl = 0.0
+    running_score = 0
     for idx, t in enumerate(trades[-30:]):
         running_pnl = round(running_pnl + (t.pnl or 0.0), 2)
+        running_score += 1 if t.result == 'WIN' else (-1 if t.result == 'LOSS' else 0)
         equity_curve.append({
             'trade': f'#{idx + 1}',
             'day': t.timestamp.strftime('%m-%d %H:%M') if t.timestamp else f'T{idx+1}',
             'pnl': running_pnl,
+            'net_score': running_score,
             'trade_pnl': round(t.pnl or 0.0, 2)
         })
 
@@ -432,6 +435,8 @@ async def get_stats(db: Session = Depends(get_db)):
         'wins': wins,
         'losses': losses,
         'win_rate': win_rate,
+        'net_wins': wins - losses,
+        'win_loss_ratio': round(wins / max(1, losses), 2),
         'total_pnl': total_pnl,
         'streak': streak,
         'streak_dir': streak_dir,
@@ -440,6 +445,31 @@ async def get_stats(db: Session = Depends(get_db)):
         'best_timeframe': '1m',
         'equity_curve': equity_curve
     }
+
+
+@router.get('/pair-stats')
+async def get_pair_stats():
+    """
+    Returns per-pair accuracy, win rate, recent outcome, and cooldown status.
+    Powers the smart loss streak protection UI.
+    """
+    learner = get_adaptive_learner()
+    result = {}
+    for pair, stats in learner.pair_accuracy.items():
+        cooldown_active = learner.is_pair_in_cooldown(pair)
+        secs_left = max(0, int(learner.pair_cooldown_until.get(pair, 0) - __import__('time').time())) if cooldown_active else 0
+        recent = learner.pair_recent_outcomes.get(pair, [])
+        result[pair] = {
+            'wins': stats.get('wins', 0),
+            'total': stats.get('total', 0),
+            'win_rate': round(stats.get('wins', 0) / max(1, stats.get('total', 1)) * 100, 1),
+            'ema_accuracy': round(stats.get('ema_acc', 0.60) * 100, 1),
+            'recent_outcomes': ['W' if x else 'L' for x in recent[-5:]],
+            'cooldown_active': cooldown_active,
+            'cooldown_seconds_left': secs_left,
+            'status': '🔴 COOLDOWN' if cooldown_active else ('🟡 WEAK' if stats.get('ema_acc', 0.6) < 0.5 else '🟢 ACTIVE')
+        }
+    return {'pair_stats': result, 'total_pairs': len(result)}
 
 
 @router.get('/trades')
@@ -511,7 +541,7 @@ async def get_signals(limit: int = Query(50, ge=1, le=200), db: Session = Depend
 
 @router.get('/indicators')
 async def get_indicators(db: Session = Depends(get_db)):
-    """Return list of all 28 indicator names plus the latest calculated breakdown."""
+    """Return list of all 33 indicator feature names plus the latest calculated breakdown."""
     latest_sig = db.query(Signal).order_by(Signal.timestamp.desc()).first()
     latest_breakdown = json.loads(latest_sig.indicators_json) if (latest_sig and latest_sig.indicators_json) else {
         'rsi_14': {'value': 35.0, 'signal': 'NEUTRAL'},
@@ -522,7 +552,7 @@ async def get_indicators(db: Session = Depends(get_db)):
     }
     return {
         'indicators': FEATURE_COLUMNS,
-        'count': len(FEATURE_COLUMNS),
+        'count': len(FEATURE_COLUMNS),  # 33 feature columns
         'latest': latest_breakdown
     }
 

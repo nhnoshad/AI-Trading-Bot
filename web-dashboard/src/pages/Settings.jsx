@@ -7,14 +7,11 @@ export default function Settings() {
   const handleChange = (key, value) => updateSettings({ [key]: parseFloat(value) || value })
 
   const fields = [
-    { key: 'tradeAmount', label: 'Default Trade Amount ($)', type: 'number', min: 1, max: 10000 },
-    { key: 'tradeDuration', label: 'Default Trade Duration (s)', type: 'number', min: 30, max: 3600 },
+    { key: 'tradeDuration', label: 'Default Prediction Duration (s)', type: 'number', min: 30, max: 3600 },
     { key: 'minConfidence', label: 'Min Confidence Threshold (%)', type: 'number', min: 50, max: 95 },
-    { key: 'maxTradesPerHour', label: 'Max Trades Per Hour', type: 'number', min: 1, max: 50 },
-    { key: 'maxConsecutiveLosses', label: 'Max Consecutive Losses', type: 'number', min: 1, max: 10 },
-    { key: 'dailyLossLimit', label: 'Daily Loss Limit ($)', type: 'number', min: 10, max: 10000 },
-    { key: 'dailyProfitTarget', label: 'Daily Profit Target ($)', type: 'number', min: 10, max: 10000 },
-    { key: 'cooldownSeconds', label: 'Cooldown Between Trades (s)', type: 'number', min: 0, max: 300 },
+    { key: 'maxTradesPerHour', label: 'Max Predictions Evaluated Per Hour', type: 'number', min: 1, max: 50 },
+    { key: 'maxConsecutiveLosses', label: 'Max Consecutive Losses Alert', type: 'number', min: 1, max: 10 },
+    { key: 'cooldownSeconds', label: 'Cooldown Between Predictions (s)', type: 'number', min: 0, max: 300 },
   ]
 
   return (

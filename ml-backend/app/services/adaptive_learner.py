@@ -15,7 +15,7 @@ import joblib
 import logging
 import numpy as np
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List, Optional
 import concurrent.futures
 from sqlalchemy.orm import Session
@@ -69,7 +69,7 @@ def compute_financial_sample_weights(
 
     # 1. Exponential Time Decay
     if 'timestamp' in df.columns:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         ts_series = pd.to_datetime(df['timestamp'], errors='coerce')
         default_ts = now - timedelta(days=retention_days / 2.0)
         ts_series = ts_series.fillna(default_ts)
@@ -116,14 +116,26 @@ class AdaptiveLearner:
         self.retention_days = 35  # Keep at least 1 full month (35 days) of learning data
         self.weights = self._load_weights()
         self.outcomes_since_last_retrain = 0
-        self.auto_retrain_every_n_outcomes = 15   # Reduced 25→15: faster adaptation in live sessions
-        self.ema_alpha = 0.15                      # Raised 0.10→0.15: faster EMA weight convergence
+        self.auto_retrain_every_n_outcomes = 50   # Raised 15→50: retrain after meaningful data accumulates
+        self.ema_alpha = 0.12                      # Balanced EMA alpha for stable weight convergence
         self.min_weight = 0.05                     # Floor: no model weight collapses to near-zero
         self.mlp_model = None
         self.scaler = None
         self.meta_model = None
         self.partial_fit_count = 0
         self._load_incremental_models()
+
+        # ── Smart Loss Streak Protection ─────────────────────────────────────
+        # Per-pair recent outcome tracking for intelligent cooldown
+        self.pair_recent_outcomes: Dict[str, list] = {}   # {pair: [True/False, ...]}
+        self.pair_cooldown_until: Dict[str, float] = {}   # {pair: unix_timestamp}
+        self.MAX_LOSS_STREAK = 3        # 3 consecutive losses → trigger cooldown
+        self.COOLDOWN_SECONDS = 300     # 5-minute cooldown after loss streak
+        self.PAIR_WINDOW = 10           # Look back 10 outcomes per pair
+
+        # ── Per-Pair Accuracy Tracking ────────────────────────────────────────
+        self.pair_accuracy: Dict[str, Dict] = {}   # {pair: {wins, total, ema_acc}}
+        self._load_pair_stats()
 
     def _load_incremental_models(self):
         """Loads MLP and Scaler into memory for ultra-fast online neural adaptation."""
@@ -133,6 +145,14 @@ class AdaptiveLearner:
             meta_path = os.path.join(MODELS_DIR, 'meta_model.pkl')
             if os.path.exists(mlp_path):
                 self.mlp_model = joblib.load(mlp_path)
+                # Ensure early_stopping=False so online partial_fit adaptation never raises errors
+                if getattr(self.mlp_model, 'early_stopping', False):
+                    self.mlp_model.early_stopping = False
+                if getattr(self.mlp_model, 'best_loss_', None) is None:
+                    if hasattr(self.mlp_model, 'loss_curve_') and self.mlp_model.loss_curve_:
+                        self.mlp_model.best_loss_ = self.mlp_model.loss_curve_[-1]
+                    else:
+                        self.mlp_model.best_loss_ = 1.0
             if os.path.exists(scaler_path):
                 self.scaler = joblib.load(scaler_path)
             if os.path.exists(meta_path):
@@ -186,6 +206,98 @@ class AdaptiveLearner:
                 json.dump(self.weights, f, indent=2)
         except Exception as e:
             logger.error(f'Failed to save weights: {e}')
+
+    # ── Per-Pair Stat Persistence ─────────────────────────────────────────────
+    PAIR_STATS_PATH = None  # Set lazily
+
+    def _pair_stats_path(self) -> str:
+        p = os.path.join(MODELS_DIR, 'pair_accuracy.json')
+        return p
+
+    def _load_pair_stats(self):
+        path = self._pair_stats_path()
+        if os.path.exists(path):
+            try:
+                with open(path, 'r') as f:
+                    self.pair_accuracy = json.load(f)
+            except Exception:
+                self.pair_accuracy = {}
+
+    def _save_pair_stats(self):
+        try:
+            with open(self._pair_stats_path(), 'w') as f:
+                json.dump(self.pair_accuracy, f, indent=2)
+        except Exception as e:
+            logger.warning(f'Could not save pair stats: {e}')
+
+    def update_pair_accuracy(self, pair: str, was_correct: bool):
+        """Update per-pair EMA accuracy and loss streak tracking."""
+        if pair not in self.pair_accuracy:
+            self.pair_accuracy[pair] = {'wins': 0, 'total': 0, 'ema_acc': 0.60}
+        p = self.pair_accuracy[pair]
+        p['total'] = p.get('total', 0) + 1
+        if was_correct:
+            p['wins'] = p.get('wins', 0) + 1
+        p['ema_acc'] = round(
+            0.90 * p.get('ema_acc', 0.60) + 0.10 * (1.0 if was_correct else 0.0), 4
+        )
+
+        # Update recent outcomes ring buffer
+        ring = self.pair_recent_outcomes.setdefault(pair, [])
+        ring.append(was_correct)
+        if len(ring) > self.PAIR_WINDOW:
+            ring.pop(0)
+
+        # Check loss streak → trigger cooldown
+        if len(ring) >= self.MAX_LOSS_STREAK:
+            recent = ring[-self.MAX_LOSS_STREAK:]
+            if not any(recent):  # All losses
+                cooldown_end = time.time() + self.COOLDOWN_SECONDS
+                self.pair_cooldown_until[pair] = cooldown_end
+                logger.warning(
+                    f'[SmartFilter] {pair} triggered {self.MAX_LOSS_STREAK}-loss streak cooldown '
+                    f'for {self.COOLDOWN_SECONDS}s — bot will WAIT on this pair'
+                )
+        self._save_pair_stats()
+
+    def get_pair_confidence_adjustment(self, pair: str) -> float:
+        """
+        Returns a confidence adjustment (-0.15 to +0.08) based on pair's recent accuracy.
+        Called by predictor to suppress or boost signals per-pair performance.
+        """
+        # Check cooldown
+        if pair in self.pair_cooldown_until:
+            if time.time() < self.pair_cooldown_until[pair]:
+                return -0.99  # Signal: force WAIT (effectively block this pair)
+            else:
+                del self.pair_cooldown_until[pair]
+
+        if pair not in self.pair_accuracy:
+            return 0.0
+        ema_acc = self.pair_accuracy[pair].get('ema_acc', 0.60)
+        total = self.pair_accuracy[pair].get('total', 0)
+        if total < 5:
+            return 0.0  # Not enough data yet
+        # Map ema_acc [0.40 .. 0.80] → adjustment [-0.15 .. +0.08]
+        if ema_acc >= 0.70:
+            return +0.06   # Pair is hot — slight boost
+        elif ema_acc >= 0.60:
+            return 0.0     # Neutral
+        elif ema_acc >= 0.50:
+            return -0.06   # Underperforming — reduce confidence
+        else:
+            return -0.15   # Consistently bad pair — heavy suppression
+
+    def is_pair_in_cooldown(self, pair: str) -> bool:
+        """Returns True if pair is in loss streak cooldown (WAIT mode)."""
+        if pair in self.pair_cooldown_until:
+            if time.time() < self.pair_cooldown_until[pair]:
+                secs_left = int(self.pair_cooldown_until[pair] - time.time())
+                logger.info(f'[SmartFilter] {pair} in cooldown — {secs_left}s remaining')
+                return True
+            else:
+                del self.pair_cooldown_until[pair]
+        return False
 
     def record_outcome_and_learn(
         self,
@@ -269,12 +381,15 @@ class AdaptiveLearner:
             self.weights['mlp'] = round(float(norm_w[4]), 4)
             self._save_weights()
 
+        # 2a. Update per-pair accuracy and loss streak tracking
+        self.update_pair_accuracy(pair, was_correct)
+
         # 2. Save sample to DB and 35-day rolling CSV memory
         sample_Saved = False
         if features_dict:
             sample = LearningSample(
                 signal_id=signal_id,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
                 pair=pair,
                 timeframe=timeframe,
                 predicted_direction=pred_dir,
@@ -384,7 +499,7 @@ class AdaptiveLearner:
         and prunes rows older than 35 days (preserving >= 1 full month of learning history).
         """
         row = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'pair': pair,
             'timeframe': timeframe,
             'label': int(actual_label),
@@ -400,7 +515,7 @@ class AdaptiveLearner:
                 existing = pd.read_csv(MEMORY_CSV_PATH)
                 combined = pd.concat([existing, new_df], ignore_index=True)
                 combined['ts_parsed'] = pd.to_datetime(combined['timestamp'], errors='coerce')
-                cutoff = datetime.utcnow() - timedelta(days=self.retention_days)
+                cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=self.retention_days)
                 combined = combined[combined['ts_parsed'].isna() | (combined['ts_parsed'] >= cutoff)]
                 combined.drop(columns=['ts_parsed'], inplace=True, errors='ignore')
                 combined.to_csv(MEMORY_CSV_PATH, index=False)
@@ -420,7 +535,7 @@ class AdaptiveLearner:
 
         records = pd.DataFrame()
         n = len(df_features)
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         # Space timestamps over the last 32 days
         timestamps = [
             (now - timedelta(minutes=(n - i))).isoformat()
@@ -430,7 +545,10 @@ class AdaptiveLearner:
         records['pair'] = pair
         records['timeframe'] = timeframe
         records['label'] = df_features['label'].astype(int).values
-        records['was_correct'] = 1
+        # was_correct reflects whether the label is "UP" direction (1) — this is the ground truth
+        # from historical data, NOT a prediction outcome. We set it to match the actual label
+        # direction since historical seed data doesn't have verified prediction outcomes.
+        records['was_correct'] = df_features['label'].astype(int).values
         records['source'] = 'historical_1m_seed'
         for col in FEATURE_COLUMNS:
             records[col] = df_features[col].values
@@ -453,9 +571,9 @@ class AdaptiveLearner:
         - Confusion matrix, Accuracy, Precision, Recall, F1
         - Dynamic ensemble weights & 1-month memory buffer stats
         """
-        cutoff_30d = datetime.utcnow() - timedelta(days=30)
-        cutoff_7d = datetime.utcnow() - timedelta(days=7)
-        cutoff_24h = datetime.utcnow() - timedelta(hours=24)
+        cutoff_30d = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=30)
+        cutoff_7d = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=7)
+        cutoff_24h = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=24)
 
         samples_30d = db.query(LearningSample).filter(LearningSample.timestamp >= cutoff_30d).all()
         samples_7d = [s for s in samples_30d if s.timestamp >= cutoff_7d]
@@ -507,7 +625,7 @@ class AdaptiveLearner:
 
         return {
             'model_version': meta.get('version', settings.MODEL_VERSION),
-            'trained_at': meta.get('trained_at', datetime.utcnow().isoformat()),
+            'trained_at': meta.get('trained_at', datetime.now(timezone.utc).replace(tzinfo=None).isoformat()),
             'overall_accuracy': acc,
             'precision': prec,
             'recall': rec,
@@ -563,7 +681,7 @@ class AdaptiveLearner:
         # Prune older than 35 days
         if 'timestamp' in df.columns:
             df['ts_parsed'] = pd.to_datetime(df['timestamp'], errors='coerce')
-            cutoff = datetime.utcnow() - timedelta(days=self.retention_days)
+            cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=self.retention_days)
             df = df[df['ts_parsed'].isna() | (df['ts_parsed'] >= cutoff)].copy()
             df.drop(columns=['ts_parsed'], inplace=True, errors='ignore')
             df.to_csv(MEMORY_CSV_PATH, index=False)
@@ -651,8 +769,7 @@ class AdaptiveLearner:
                 learning_rate_init=0.002,
                 max_iter=300,
                 warm_start=False,
-                early_stopping=True,
-                validation_fraction=0.15,
+                early_stopping=False,
                 random_state=42
             )
             m.fit(X_train_s, y_train)
@@ -800,7 +917,7 @@ class AdaptiveLearner:
 
             meta = {
                 'version': new_version,
-                'trained_at': datetime.utcnow().isoformat() + 'Z',
+                'trained_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
                 'features': FEATURE_COLUMNS,
                 'n_samples': len(X),
                 'train_size': len(X_train),
@@ -821,7 +938,7 @@ class AdaptiveLearner:
             if db is not None:
                 perf_row = ModelPerformance(
                     model_version=new_version,
-                    date=datetime.utcnow().isoformat(),
+                    date=datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
                     accuracy=round(new_acc * 100, 2),
                     precision=round(prec * 100, 2),
                     recall=round(rec * 100, 2),

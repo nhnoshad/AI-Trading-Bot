@@ -39,7 +39,7 @@
         <span>📊</span> Dashboard
       </button>
       <button onclick="switchTab('history')" id="nav-history" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 hover:text-white hover:bg-[#2a2a3e]/50 transition">
-        <span>📜</span> Trade History
+        <span>🎯</span> Prediction History
       </button>
       <button onclick="switchTab('backtest')" id="nav-backtest" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 hover:text-white hover:bg-[#2a2a3e]/50 transition">
         <span>🧪</span> Backtesting
@@ -69,7 +69,7 @@
     <!-- TOP HEADER -->
     <header class="h-14 bg-[#1a1a2e] border-b border-[#2a2a3e] flex items-center justify-between px-6">
       <div class="flex items-center gap-3">
-        <h1 class="font-bold text-white text-base" id="page-title">Live Performance Dashboard</h1>
+        <h1 class="font-bold text-white text-base" id="page-title">AI Prediction & Accuracy Dashboard</h1>
         <span class="text-xs px-2.5 py-0.5 rounded-full bg-[#00d4ff]/10 text-[#00d4ff] border border-[#00d4ff]/30" id="fast-ai-badge">
           ⚡ Fast Analyze: --ms
         </span>
@@ -89,14 +89,14 @@
 
       <!-- ==================== TAB 1: DASHBOARD ==================== -->
       <section id="tab-dashboard" class="space-y-6">
-        <!-- 6 Stat Cards -->
+        <!-- 6 Stat Cards (Prediction & Outcome Focused - No Dollar Clutter) -->
         <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
           <div class="bg-[#1a1a2e] rounded-xl p-4 border border-[#2a2a3e]">
             <div class="text-[11px] text-gray-400 uppercase">Total Signals</div>
             <div class="text-2xl font-bold text-[#00d4ff] mt-1" id="st-signals">0</div>
           </div>
           <div class="bg-[#1a1a2e] rounded-xl p-4 border border-[#2a2a3e]">
-            <div class="text-[11px] text-gray-400 uppercase">Total Trades</div>
+            <div class="text-[11px] text-gray-400 uppercase">Evaluated Predictions</div>
             <div class="text-2xl font-bold text-white mt-1" id="st-trades">0</div>
           </div>
           <div class="bg-[#1a1a2e] rounded-xl p-4 border border-[#2a2a3e]">
@@ -112,16 +112,16 @@
             <div class="text-2xl font-bold text-green-400 mt-1" id="st-winrate">0%</div>
           </div>
           <div class="bg-[#1a1a2e] rounded-xl p-4 border border-[#2a2a3e]">
-            <div class="text-[11px] text-gray-400 uppercase">Total P&L</div>
-            <div class="text-2xl font-bold text-green-400 mt-1" id="st-pnl">$0.00</div>
+            <div class="text-[11px] text-gray-400 uppercase">Net Win Score</div>
+            <div class="text-2xl font-bold text-green-400 mt-1" id="st-pnl">+0 Wins</div>
           </div>
           <div class="bg-[#1a1a2e] rounded-xl p-4 border border-[#2a2a3e]">
-            <div class="text-[11px] text-gray-400 uppercase">Best Pair / Streak</div>
+            <div class="text-[11px] text-gray-400 uppercase">Best Pair & Streak</div>
             <div class="text-lg font-bold text-white mt-1" id="st-bestpair">EURUSD</div>
           </div>
         </div>
 
-        <!-- Live Signal + Equity Curve -->
+        <!-- Live Signal + Prediction Progression Curve -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <!-- Live Signal Card -->
           <div id="live-signal-box" class="bg-[#1a1a2e] rounded-xl p-6 border-2 border-[#2a2a3e] flex flex-col justify-between">
@@ -149,23 +149,28 @@
               </ul>
             </div>
             <div class="flex gap-3 mt-4 pt-3 border-t border-[#2a2a3e]">
-              <button onclick="recordSimulatedTrade('WIN')" class="flex-1 py-2 bg-green-500/20 border border-green-500/40 text-green-400 rounded-lg text-xs font-bold hover:bg-green-500/30">
-                ✅ Log Trade WIN (+Learn)
+              <button onclick="recordSimulatedTrade('WIN')" class="flex-1 py-2 bg-green-500/20 border border-green-500/40 text-green-400 rounded-lg text-xs font-bold hover:bg-green-500/30 transition">
+                ✅ Mark Prediction WIN (+Learn)
               </button>
-              <button onclick="recordSimulatedTrade('LOSS')" class="flex-1 py-2 bg-red-500/20 border border-red-500/40 text-red-400 rounded-lg text-xs font-bold hover:bg-red-500/30">
-                ❌ Log Trade LOSS (+Learn)
+              <button onclick="recordSimulatedTrade('LOSS')" class="flex-1 py-2 bg-red-500/20 border border-red-500/40 text-red-400 rounded-lg text-xs font-bold hover:bg-red-500/30 transition">
+                ❌ Mark Prediction LOSS (+Learn)
               </button>
             </div>
           </div>
 
-          <!-- Equity Curve SVG Chart -->
+          <!-- Prediction Outcome Progression SVG Chart (Pure Win/Loss - No Dollars) -->
           <div class="bg-[#1a1a2e] rounded-xl p-6 border border-[#2a2a3e] flex flex-col">
             <div class="flex justify-between items-center mb-4">
-              <span class="text-xs uppercase tracking-wider text-gray-400">Cumulative Equity Curve ($)</span>
-              <span class="text-xs text-green-400" id="eq-summary">Live Trade Progression</span>
+              <span class="text-xs uppercase tracking-wider text-gray-400">📈 Cumulative Win/Loss Progression</span>
+              <span class="text-xs text-green-400 font-bold" id="eq-summary">Net Wins Progression</span>
             </div>
             <div class="flex-1 flex items-center justify-center bg-[#0d0d1a] rounded-xl p-4 min-h-[220px]" id="equity-chart-container">
               <svg id="equity-svg" viewBox="0 0 500 180" class="w-full h-44 overflow-visible"></svg>
+            </div>
+            <div class="flex justify-between text-[11px] text-gray-500 mt-2 px-1">
+              <span>← Past Predictions</span>
+              <span class="text-[#00ff88]">▲ Up = Win (+1) | ▼ Down = Loss (-1)</span>
+              <span>Latest Outcome →</span>
             </div>
           </div>
         </div>
@@ -175,6 +180,16 @@
           <div class="p-4 border-b border-[#2a2a3e] flex justify-between items-center">
             <h2 class="font-semibold text-sm text-white">Recent AI Signals Generated</h2>
             <span class="text-xs text-gray-400">Auto-verifies & learns from market results</span>
+          </div>
+          <!-- Smart Loss Streak Protection Panel -->
+          <div class="px-4 py-3 bg-[#0d0d1a] border-b border-[#2a2a3e]">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-bold text-[#00d4ff]">&#x1F6E1;&#xFE0F; Smart Loss Streak Protection</span>
+              <span class="text-[10px] text-gray-500">3 losses = 5min cooldown</span>
+            </div>
+            <div id="pair-status-row" class="flex flex-wrap gap-2 text-[10px]">
+              <span class="text-gray-500 italic">Loading pair stats...</span>
+            </div>
           </div>
           <div class="overflow-x-auto">
             <table class="w-full text-xs">
@@ -196,7 +211,7 @@
         </div>
       </section>
 
-      <!-- ==================== TAB 2: TRADE HISTORY ==================== -->
+      <!-- ==================== TAB 2: PREDICTION HISTORY ==================== -->
       <section id="tab-history" class="hidden space-y-4">
         <div class="flex flex-wrap items-center justify-between gap-3 bg-[#1a1a2e] p-4 rounded-xl border border-[#2a2a3e]">
           <div class="flex gap-3">
@@ -204,7 +219,7 @@
               <option value="ALL">All Pairs</option>
             </select>
             <select id="flt-result" onchange="renderTradesTable()" class="bg-[#0d0d1a] border border-[#2a2a3e] rounded-lg px-3 py-1.5 text-xs text-white">
-              <option value="ALL">All Results</option>
+              <option value="ALL">All Outcomes</option>
               <option value="WIN">WIN</option>
               <option value="LOSS">LOSS</option>
             </select>
@@ -214,8 +229,8 @@
               <option value="MANUAL">MANUAL</option>
             </select>
           </div>
-          <button onclick="exportTradesCsv()" class="px-4 py-1.5 bg-[#00d4ff] text-[#0d0d1a] font-bold rounded-lg text-xs">
-            📥 Export CSV
+          <button onclick="exportTradesCsv()" class="px-4 py-1.5 bg-[#00d4ff] text-[#0d0d1a] font-bold rounded-lg text-xs hover:bg-[#00b8d4] transition">
+            📥 Export Outcomes CSV
           </button>
         </div>
 
@@ -226,12 +241,11 @@
                 <th class="px-4 py-3 text-left">#</th>
                 <th class="px-4 py-3 text-left">Timestamp</th>
                 <th class="px-4 py-3 text-left">Pair</th>
-                <th class="px-4 py-3 text-left">Direction</th>
-                <th class="px-4 py-3 text-left">Amount</th>
+                <th class="px-4 py-3 text-left">Prediction</th>
                 <th class="px-4 py-3 text-left">Duration</th>
                 <th class="px-4 py-3 text-left">Entry Price</th>
-                <th class="px-4 py-3 text-left">Result</th>
-                <th class="px-4 py-3 text-left">P&L</th>
+                <th class="px-4 py-3 text-left">Exit Price</th>
+                <th class="px-4 py-3 text-left">Outcome</th>
                 <th class="px-4 py-3 text-left">Mode</th>
               </tr>
             </thead>
@@ -244,7 +258,7 @@
       <section id="tab-backtest" class="hidden space-y-6">
         <div class="bg-[#1a1a2e] rounded-xl p-6 border border-[#2a2a3e] space-y-4">
           <h2 class="font-semibold text-[#00d4ff] text-sm">⚙️ Backtest Strategy on 35-Day Rolling Historical Data</h2>
-          <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
               <label class="text-xs text-gray-400 block mb-1">Market Pair</label>
               <select id="bt-pair" class="w-full bg-[#0d0d1a] border border-[#2a2a3e] rounded-lg px-3 py-2 text-xs text-white">
@@ -274,18 +288,14 @@
               <label class="text-xs text-gray-400 block mb-1">Min Confidence (%)</label>
               <input type="number" id="bt-conf" value="65" min="50" max="95" class="w-full bg-[#0d0d1a] border border-[#2a2a3e] rounded-lg px-3 py-2 text-xs text-white" />
             </div>
-            <div>
-              <label class="text-xs text-gray-400 block mb-1">Trade Amount ($)</label>
-              <input type="number" id="bt-amount" value="10" min="1" class="w-full bg-[#0d0d1a] border border-[#2a2a3e] rounded-lg px-3 py-2 text-xs text-white" />
-            </div>
           </div>
-          <button onclick="runBacktestNow()" id="bt-btn" class="w-full py-2.5 bg-[#00d4ff] text-[#0d0d1a] font-bold rounded-lg text-xs hover:bg-[#00b8d4]">
+          <button onclick="runBacktestNow()" id="bt-btn" class="w-full py-2.5 bg-[#00d4ff] text-[#0d0d1a] font-bold rounded-lg text-xs hover:bg-[#00b8d4] transition">
             ▶ Run Backtest Simulation
           </button>
         </div>
 
         <div id="bt-results-box" class="bg-[#1a1a2e] rounded-xl p-6 border border-[#2a2a3e] space-y-4">
-          <h3 class="font-semibold text-white text-sm">📊 Backtest Results</h3>
+          <h3 class="font-semibold text-white text-sm">📊 Prediction Accuracy Backtest Results</h3>
           <div class="grid grid-cols-2 md:grid-cols-6 gap-4 text-center">
             <div class="bg-[#0d0d1a] p-3 rounded-lg">
               <div class="text-xl font-bold text-green-400" id="bt-res-wr">--%</div>
@@ -293,15 +303,15 @@
             </div>
             <div class="bg-[#0d0d1a] p-3 rounded-lg">
               <div class="text-xl font-bold text-white" id="bt-res-total">--</div>
-              <div class="text-[11px] text-gray-500">Total Trades</div>
+              <div class="text-[11px] text-gray-500">Predictions Evaluated</div>
             </div>
             <div class="bg-[#0d0d1a] p-3 rounded-lg">
-              <div class="text-xl font-bold text-green-400" id="bt-res-pnl">$--</div>
-              <div class="text-[11px] text-gray-500">Net P&L</div>
+              <div class="text-xl font-bold text-green-400" id="bt-res-pnl">-- Wins</div>
+              <div class="text-[11px] text-gray-500">Net Win Score</div>
             </div>
             <div class="bg-[#0d0d1a] p-3 rounded-lg">
-              <div class="text-xl font-bold text-red-400" id="bt-res-dd">$--</div>
-              <div class="text-[11px] text-gray-500">Max Drawdown</div>
+              <div class="text-xl font-bold text-[#00d4ff]" id="bt-res-dd">--</div>
+              <div class="text-[11px] text-gray-500">Win/Loss Ratio</div>
             </div>
             <div class="bg-[#0d0d1a] p-3 rounded-lg">
               <div class="text-xl font-bold text-[#00d4ff]" id="bt-res-pf">--</div>
@@ -309,7 +319,7 @@
             </div>
             <div class="bg-[#0d0d1a] p-3 rounded-lg">
               <div class="text-xl font-bold text-purple-400" id="bt-res-sr">--</div>
-              <div class="text-[11px] text-gray-500">Sharpe Ratio</div>
+              <div class="text-[11px] text-gray-500">Consistency Ratio</div>
             </div>
           </div>
         </div>
@@ -424,14 +434,10 @@
       <!-- ==================== TAB 5: SETTINGS ==================== -->
       <section id="tab-settings" class="hidden max-w-2xl space-y-6">
         <div class="bg-[#1a1a2e] rounded-xl p-6 border border-[#2a2a3e] space-y-4">
-          <h2 class="font-semibold text-[#00d4ff] text-sm">🛡️ Bot Trading & Safety Controls</h2>
+          <h2 class="font-semibold text-[#00d4ff] text-sm">🛡️ AI Prediction & Safety Controls</h2>
           <div class="space-y-3 text-xs">
             <div class="flex justify-between items-center">
-              <label class="text-gray-300">Default Trade Amount ($)</label>
-              <input type="number" id="set-amount" value="10" class="bg-[#0d0d1a] border border-[#2a2a3e] rounded px-3 py-1.5 text-white w-32" />
-            </div>
-            <div class="flex justify-between items-center">
-              <label class="text-gray-300">Default Trade Duration (seconds)</label>
+              <label class="text-gray-300">Default Prediction Duration (seconds)</label>
               <input type="number" id="set-duration" value="60" class="bg-[#0d0d1a] border border-[#2a2a3e] rounded px-3 py-1.5 text-white w-32" />
             </div>
             <div class="flex justify-between items-center">
@@ -439,23 +445,19 @@
               <input type="number" id="set-conf" value="65" min="50" max="95" class="bg-[#0d0d1a] border border-[#2a2a3e] rounded px-3 py-1.5 text-white w-32" />
             </div>
             <div class="flex justify-between items-center">
-              <label class="text-gray-300">Maximum Trades Per Hour</label>
-              <input type="number" id="set-maxhr" value="10" class="bg-[#0d0d1a] border border-[#2a2a3e] rounded px-3 py-1.5 text-white w-32" />
+              <label class="text-gray-300">Max Predictions Evaluated Per Hour</label>
+              <input type="number" id="set-maxhr" value="15" class="bg-[#0d0d1a] border border-[#2a2a3e] rounded px-3 py-1.5 text-white w-32" />
             </div>
             <div class="flex justify-between items-center">
-              <label class="text-gray-300">Max Consecutive Losses (Auto-Stop)</label>
+              <label class="text-gray-300">Max Consecutive Losses (Auto-Pause Alert)</label>
               <input type="number" id="set-maxloss" value="3" class="bg-[#0d0d1a] border border-[#2a2a3e] rounded px-3 py-1.5 text-white w-32" />
             </div>
             <div class="flex justify-between items-center">
-              <label class="text-gray-300">Daily Loss Limit ($)</label>
-              <input type="number" id="set-dailyloss" value="50" class="bg-[#0d0d1a] border border-[#2a2a3e] rounded px-3 py-1.5 text-white w-32" />
-            </div>
-            <div class="flex justify-between items-center">
-              <label class="text-gray-300">Daily Profit Target ($)</label>
-              <input type="number" id="set-dailyprofit" value="100" class="bg-[#0d0d1a] border border-[#2a2a3e] rounded px-3 py-1.5 text-white w-32" />
+              <label class="text-gray-300">Minimum Win Rate Target (%)</label>
+              <input type="number" id="set-minwinrate" value="60" min="50" max="90" class="bg-[#0d0d1a] border border-[#2a2a3e] rounded px-3 py-1.5 text-white w-32" />
             </div>
           </div>
-          <button onclick="saveDashboardSettings()" class="w-full py-2 bg-green-500 text-[#0d0d1a] font-bold rounded-lg text-xs">
+          <button onclick="saveDashboardSettings()" class="w-full py-2 bg-green-500 text-[#0d0d1a] font-bold rounded-lg text-xs hover:bg-green-400 transition">
             💾 Save Settings
           </button>
           <div id="settings-saved-msg" class="hidden text-center text-xs text-green-400">✅ Settings saved locally!</div>
@@ -505,11 +507,11 @@
       document.getElementById('tab-' + tab).classList.remove('hidden');
       document.getElementById('nav-' + tab).classList.add('active');
       const titles = {
-        dashboard: 'Live Performance Dashboard',
-        history: 'Trade History & CSV Export',
-        backtest: 'Strategy Backtesting Simulator',
-        model: 'AI Model Performance & 35-Day Rolling Learning',
-        settings: 'Bot Risk & Safety Settings',
+        dashboard: 'AI Prediction & Accuracy Dashboard',
+        history: 'Prediction Outcome History & Verification',
+        backtest: 'Prediction Accuracy Backtest Simulator',
+        model: 'AI Model Performance & 35-Day Continuous Learning',
+        settings: 'AI Prediction & Safety Controls',
         login: 'Account Authentication'
       };
       document.getElementById('page-title').textContent = titles[tab] || 'Dashboard';
@@ -520,10 +522,11 @@
 
     async function refreshAll() {
       try {
-        const [healthRes, statsRes, sigRes] = await Promise.all([
+        const [healthRes, statsRes, sigRes, pairRes] = await Promise.all([
           fetch(API_BASE + '/api/health'),
           fetch(API_BASE + '/api/stats'),
-          fetch(API_BASE + '/api/signals?limit=15')
+          fetch(API_BASE + '/api/signals?limit=15'),
+          fetch(API_BASE + '/api/pair-stats').catch(() => null)
         ]);
         if (healthRes.ok) {
           const h = await healthRes.json();
@@ -532,6 +535,26 @@
           document.getElementById('conn-text').className = 'text-green-400 font-medium';
           document.getElementById('sidebar-model-ver').textContent = `Model v${h.model_version} | Active`;
         }
+        // Load pair stats for Smart Filter Panel
+        if (pairRes && pairRes.ok) {
+          const pd = await pairRes.json();
+          const pairStats = pd.pair_stats || {};
+          const row = document.getElementById('pair-status-row');
+          if (row) {
+            const chips = Object.entries(pairStats).map(([pair, s]) => {
+              const short = pair.replace(' (OTC)', '').replace('(OTC)','').trim().split('/').join('/').substring(0,10);
+              const color = s.cooldown_active ? 'bg-red-500/20 text-red-400 border-red-500/40'
+                          : s.ema_accuracy >= 60 ? 'bg-green-500/15 text-green-400 border-green-500/30'
+                          : s.ema_accuracy >= 50 ? 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30'
+                          : 'bg-red-500/15 text-red-400 border-red-500/30';
+              const icon = s.cooldown_active ? '🔴' : s.ema_accuracy >= 60 ? '🟢' : s.ema_accuracy >= 50 ? '🟡' : '🔴';
+              const cd = s.cooldown_active ? ` ⏳${s.cooldown_seconds_left}s` : '';
+              const rec = (s.recent_outcomes || []).join('');
+              return `<span class="px-2 py-1 rounded border ${color} font-mono" title="${pair}: ${s.wins}W/${s.total}T, ${s.ema_accuracy}% EMA">${icon} ${short} ${s.ema_accuracy}%${cd} [${rec}]</span>`;
+            });
+            row.innerHTML = chips.length ? chips.join('') : '<span class="text-gray-500 italic">No pair data yet — start trading!</span>';
+          }
+        }
         if (statsRes.ok) {
           const s = await statsRes.json();
           document.getElementById('st-signals').textContent = s.total_signals || 0;
@@ -539,10 +562,12 @@
           document.getElementById('st-wins').textContent = s.wins || 0;
           document.getElementById('st-losses').textContent = s.losses || 0;
           document.getElementById('st-winrate').textContent = (s.win_rate || 0) + '%';
-          const pnl = Number(s.total_pnl || 0);
+          const wins = Number(s.wins || 0);
+          const losses = Number(s.losses || 0);
+          const netScore = (s.net_wins !== undefined) ? s.net_wins : (wins - losses);
           const pnlEl = document.getElementById('st-pnl');
-          pnlEl.textContent = (pnl >= 0 ? '+' : '') + '$' + pnl.toFixed(2);
-          pnlEl.className = 'text-2xl font-bold mt-1 ' + (pnl >= 0 ? 'text-green-400' : 'text-red-400');
+          pnlEl.textContent = (netScore >= 0 ? '+' : '') + netScore + ' Wins';
+          pnlEl.className = 'text-2xl font-bold mt-1 ' + (netScore >= 0 ? 'text-green-400' : 'text-red-400');
           const streakBadge = `<span class="inline-block ml-1.5 px-2 py-0.5 rounded text-xs font-bold ${s.streak_dir === 'W' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}">${s.streak || 0}${s.streak_dir || 'W'}</span>`;
           document.getElementById('st-bestpair').innerHTML = `${s.best_pair_display || s.best_pair || 'EUR/USD'} ${streakBadge}`;
           drawEquityCurve(s.equity_curve || []);
@@ -629,20 +654,35 @@
 
     function drawEquityCurve(curve) {
       const svg = document.getElementById('equity-svg');
-      const pts = curve.length >= 2 ? curve.map(c => c.pnl) : [0, 8.5, 17, 7, 15.5, 24, 32.5, 22.5, 31, 39.5, 48];
-      const minV = Math.min(0, ...pts);
-      const maxV = Math.max(10, ...pts);
-      const range = (maxV - minV) || 10;
+      let score = 0;
+      const pts = (curve && curve.length >= 2)
+        ? curve.map(c => {
+            if (c.net_score !== undefined) return c.net_score;
+            const diff = (c.trade_pnl !== undefined ? (c.trade_pnl > 0 ? 1 : c.trade_pnl < 0 ? -1 : 0) : (c.pnl > 0 ? 1 : -1));
+            score += diff;
+            return score;
+          })
+        : [0, 1, 2, 1, 2, 3, 4, 3, 4, 5, 6];
+      const minV = Math.min(-2, ...pts);
+      const maxV = Math.max(5, ...pts);
+      const range = (maxV - minV) || 5;
       const w = 500, h = 160;
       const coords = pts.map((v, i) => {
         const x = (i / Math.max(1, pts.length - 1)) * (w - 20) + 10;
         const y = h - ((v - minV) / range) * (h - 20) - 10;
         return `${x.toFixed(1)},${y.toFixed(1)}`;
       });
+      const lastVal = pts[pts.length - 1];
+      const strokeColor = lastVal >= 0 ? '#00ff88' : '#ff4d4d';
       svg.innerHTML = `
         <line x1="10" y1="${h/2}" x2="${w-10}" y2="${h/2}" stroke="#2a2a3e" stroke-dasharray="4 4" />
-        <polyline fill="none" stroke="#00ff88" stroke-width="3" points="${coords.join(' ')}" />
+        <polyline fill="none" stroke="${strokeColor}" stroke-width="3" points="${coords.join(' ')}" />
       `;
+      const eqEl = document.getElementById('eq-summary');
+      if (eqEl) {
+        eqEl.textContent = `Net Score: ${lastVal >= 0 ? '+' : ''}${lastVal} Wins | Past ${pts.length} Outcomes`;
+        eqEl.className = 'text-xs font-bold ' + (lastVal >= 0 ? 'text-green-400' : 'text-red-400');
+      }
     }
 
     async function simulateLiveSignal() {
@@ -680,7 +720,6 @@
       }
       const sig = lastSignalObj || { signal_id: null, pair: 'EURUSD', signal: 'BUY', entry_price: 1.0854 };
       const dir = sig.signal === 'SELL' ? 'SELL' : 'BUY';
-      const amount = parseFloat(document.getElementById('set-amount')?.value || 10);
       await fetch(API_BASE + '/api/log-trade', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -688,7 +727,7 @@
           signal_id: sig.signal_id || sig.id || null,
           pair: sig.pair || 'EURUSD',
           direction: dir,
-          amount,
+          amount: 1.0,
           duration: 60,
           entry_price: sig.entry_price || 1.0854,
           result,
@@ -708,7 +747,7 @@
           renderTradesTable();
         }
       } catch (err) {
-        console.error('Error loading trades:', err);
+        console.error('Error loading outcomes:', err);
       }
     }
 
@@ -719,7 +758,7 @@
       const unique = pairsList && pairsList.length
         ? pairsList
         : Array.from(new Set(allTrades.map(t => t.pair).filter(Boolean))).sort();
-      sel.innerHTML = `<option value="ALL">All Pairs (${allTrades.length} trades)</option>` +
+      sel.innerHTML = `<option value="ALL">All Pairs (${allTrades.length} outcomes)</option>` +
         unique.map(p => `<option value="${p}">${p}</option>`).join('');
       if (unique.includes(cur)) sel.value = cur;
     }
@@ -735,34 +774,33 @@
       );
       const tbody = document.getElementById('trades-tbody');
       if (!filtered.length) {
-        tbody.innerHTML = `<tr><td colspan="10" class="px-4 py-6 text-center text-gray-500">No matching trades recorded yet.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="px-4 py-6 text-center text-gray-500">No matching outcomes recorded yet.</td></tr>`;
         return;
       }
       tbody.innerHTML = filtered.map(t => `
-        <tr class="border-t border-[#2a2a3e]">
+        <tr class="border-t border-[#2a2a3e] hover:bg-[#2a2a3e]/30">
           <td class="px-4 py-2.5 text-gray-500">#${t.id}</td>
           <td class="px-4 py-2.5 text-gray-400">${t.timestamp ? new Date(t.timestamp).toLocaleString() : ''}</td>
           <td class="px-4 py-2.5 font-mono">${t.pair}</td>
           <td class="px-4 py-2.5 font-bold ${t.direction === 'BUY' ? 'text-green-400' : 'text-red-400'}">${t.direction}</td>
-          <td class="px-4 py-2.5">$${t.amount}</td>
           <td class="px-4 py-2.5">${t.duration}s</td>
-          <td class="px-4 py-2.5">${t.entry_price}</td>
-          <td class="px-4 py-2.5 font-bold ${t.result === 'WIN' ? 'text-green-400' : 'text-red-400'}">${t.result}</td>
-          <td class="px-4 py-2.5 font-bold ${t.pnl >= 0 ? 'text-green-400' : 'text-red-400'}">${t.pnl >= 0 ? '+' : ''}$${Number(t.pnl || 0).toFixed(2)}</td>
+          <td class="px-4 py-2.5 font-mono">${t.entry_price}</td>
+          <td class="px-4 py-2.5 font-mono text-gray-300">${t.exit_price ?? '--'}</td>
+          <td class="px-4 py-2.5 font-bold ${t.result === 'WIN' ? 'text-green-400' : 'text-red-400'}">${t.result === 'WIN' ? '✅ WIN' : '❌ LOSS'}</td>
           <td class="px-4 py-2.5"><span class="px-2 py-0.5 rounded-full text-[10px] bg-blue-500/20 text-blue-400">${t.mode}</span></td>
         </tr>
       `).join('');
     }
 
     function exportTradesCsv() {
-      if (!allTrades.length) return alert('No trades to export.');
-      const headers = ['ID', 'Timestamp', 'Pair', 'Direction', 'Amount', 'Duration', 'EntryPrice', 'Result', 'PnL', 'Mode'];
-      const rows = allTrades.map(t => [t.id, t.timestamp, t.pair, t.direction, t.amount, t.duration, t.entry_price, t.result, t.pnl, t.mode]);
+      if (!allTrades.length) return alert('No outcomes to export.');
+      const headers = ['ID', 'Timestamp', 'Pair', 'Prediction', 'Duration', 'EntryPrice', 'ExitPrice', 'Outcome', 'Mode'];
+      const rows = allTrades.map(t => [t.id, t.timestamp, t.pair, t.direction, t.duration, t.entry_price, t.exit_price ?? '', t.result, t.mode]);
       const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
       const blob = new Blob([csv], { type: 'text/csv' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = 'ai_bot_trades.csv';
+      a.download = 'ai_prediction_outcomes.csv';
       a.click();
     }
 
@@ -772,7 +810,7 @@
         timeframe: document.getElementById('bt-tf').value,
         period: document.getElementById('bt-period').value,
         confidence_threshold: parseFloat(document.getElementById('bt-conf').value || 65),
-        trade_amount: parseFloat(document.getElementById('bt-amount').value || 10)
+        trade_amount: 1.0
       };
       const resp = await fetch(API_BASE + '/api/backtest', {
         method: 'POST',
@@ -781,12 +819,17 @@
       });
       if (resp.ok) {
         const r = await resp.json();
+        const wins = Math.round((r.total_trades || 0) * (r.win_rate || 0) / 100);
+        const losses = (r.total_trades || 0) - wins;
+        const netWins = wins - losses;
+        const ratio = losses > 0 ? (wins / losses).toFixed(2) : (wins > 0 ? wins.toFixed(1) : '1.00');
+
         document.getElementById('bt-res-wr').textContent = r.win_rate + '%';
         document.getElementById('bt-res-total').textContent = r.total_trades;
-        document.getElementById('bt-res-pnl').textContent = (r.total_pnl >= 0 ? '+' : '') + '$' + r.total_pnl;
-        document.getElementById('bt-res-dd').textContent = '$' + r.max_drawdown;
-        document.getElementById('bt-res-pf').textContent = r.profit_factor;
-        document.getElementById('bt-res-sr').textContent = r.sharpe_ratio;
+        document.getElementById('bt-res-pnl').textContent = (netWins >= 0 ? '+' : '') + netWins + ' Wins';
+        document.getElementById('bt-res-dd').textContent = ratio + 'x';
+        document.getElementById('bt-res-pf').textContent = r.profit_factor || ratio;
+        document.getElementById('bt-res-sr').textContent = r.sharpe_ratio || 'Good';
       }
     }
 

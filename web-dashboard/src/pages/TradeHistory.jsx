@@ -56,10 +56,10 @@ export default function TradeHistory() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-white">Trade History</h1>
+        <h1 className="text-xl font-bold text-white">Prediction Outcome History</h1>
         <button
           onClick={exportCSV}
-          className="flex items-center gap-2 px-3 py-1.5 bg-[#00d4ff] text-[#0d0d1a] font-bold rounded-lg text-xs"
+          className="flex items-center gap-2 px-3 py-1.5 bg-[#00d4ff] text-[#0d0d1a] font-bold rounded-lg text-xs hover:bg-[#00b8d4] transition"
         >
           <Download size={14} /> Export CSV
         </button>
@@ -103,7 +103,7 @@ export default function TradeHistory() {
         <table className="w-full text-sm">
           <thead className="text-xs text-gray-500 uppercase bg-[#0d0d1a]">
             <tr>
-              {['#', 'Time', 'Pair', 'Direction', 'Amount', 'Duration', 'Result', 'P&L', 'Mode'].map(h => (
+              {['#', 'Time', 'Pair', 'Prediction', 'Duration', 'Entry Price', 'Exit Price', 'Outcome', 'Mode'].map(h => (
                 <th key={h} className="px-4 py-3 text-left">{h}</th>
               ))}
             </tr>
@@ -117,13 +117,11 @@ export default function TradeHistory() {
                 <td className={`px-4 py-3 font-bold ${t.direction === 'BUY' ? 'text-green-400' : 'text-red-400'}`}>
                   {t.direction}
                 </td>
-                <td className="px-4 py-3">${t.amount}</td>
                 <td className="px-4 py-3">{t.duration}s</td>
+                <td className="px-4 py-3 font-mono">{t.entry_price}</td>
+                <td className="px-4 py-3 font-mono text-gray-300">{t.exit_price ?? '--'}</td>
                 <td className={`px-4 py-3 font-bold ${t.result === 'WIN' ? 'text-green-400' : 'text-red-400'}`}>
-                  {t.result}
-                </td>
-                <td className={`px-4 py-3 font-bold ${t.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {t.pnl >= 0 ? '+' : ''}${Number(t.pnl || 0).toFixed(2)}
+                  {t.result === 'WIN' ? '✅ WIN' : '❌ LOSS'}
                 </td>
                 <td className="px-4 py-3">
                   <span className={`px-2 py-0.5 rounded-full text-xs ${

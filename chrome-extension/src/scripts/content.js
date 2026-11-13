@@ -186,6 +186,10 @@
     const d = new Date(timestamp);
     const h = String(d.getHours()).padStart(2, '0');
     const m = String(d.getMinutes()).padStart(2, '0');
+    if (getEffectiveTimeframeSeconds() < 60) {
+      const s = String(d.getSeconds()).padStart(2, '0');
+      return `${h}:${m}:${s}`;
+    }
     return `${h}:${m}`;
   }
 
@@ -974,20 +978,33 @@
   // ── 4. Dynamic Timeframe Switching & Watcher ──────────────────────────────
   function detectActiveTimeframeFromPage() {
     const tfSelectors = [
-      '[class*="timeframe"].active', '[class*="timeframe"][class*="selected"]',
-      '[class*="period"].active', '[class*="period"].selected',
+      '[class*="timeframe"].active', '[class*="timeframe"][class*="selected"]', '[class*="timeframe"][class*="is-active"]',
+      '[class*="period"].active', '[class*="period"].selected', '[class*="period"][class*="is-active"]',
       '[class*="chart-period"].active', '[class*="chart-period"].selected',
       '.active[data-timeframe]', '[data-active-timeframe]',
-      '[class*="time-frame-item"].active', '[class*="time-frame-item"].selected'
+      '[class*="time-frame-item"].active', '[class*="time-frame-item"].selected',
+      '[class*="timeframe-item"].active', '[class*="timeframe-item"].selected',
+      '[class*="select-list__item"].active', '[class*="select-list__item"].selected',
+      '[class*="dropdown-item"].active', '[class*="dropdown-item"].selected',
+      '[class*="timeframe-switcher"]', '[class*="time-frame-switcher"]',
+      '[class*="chart-timeframe"]', '[class*="timeframe-btn"]',
+      '.left-panel [class*="button"]', '.chart-controls [class*="button"]',
+      '[class*="timeframe"]', '[class*="time-frame"]'
     ];
     for (const sel of tfSelectors) {
-      const el = document.querySelector(sel);
-      if (el && el.textContent) {
-        const t = el.textContent.trim().toLowerCase();
-        if (/^(5s|10s|15s|30s|1m|2m|3m|5m|10m|15m|30m|1h)$/.test(t)) {
-          return t;
+      try {
+        const els = document.querySelectorAll(sel);
+        for (const el of els) {
+          if (el && el.textContent) {
+            const t = el.textContent.trim().toLowerCase();
+            if (/^(5s|10s|15s|30s|1m|2m|3m|5m|10m|15m|30m|1h)$/.test(t)) {
+              if (!el.closest('#ai-trading-overlay') && !el.closest('#ai-bot-overlay')) {
+                return t;
+              }
+            }
+          }
         }
-      }
+      } catch (e) {}
     }
     return null;
   }
@@ -1397,7 +1414,8 @@
           if (botSettings.soundEnabled !== false && activeCandlePrediction.direction !== 'WAIT') {
             playSignalSound(activeCandlePrediction.direction);
           }
-        } else if (lastSignal && currentPair) {
+        } else if (lastSignal && currentPair && lastSignal.timestamp && (Date.now() - new Date(lastSignal.timestamp).getTime() <= (tInfo.tfMs * 1.5))) {
+          // Only reuse lastSignal if it is genuinely FRESH (within 1.5 candle periods)
           activeCandlePrediction = {
             pair: currentPair,
             direction: lastSignal.signal,
@@ -1420,6 +1438,22 @@
           if (botSettings.soundEnabled !== false && activeCandlePrediction.direction !== 'WAIT') {
             playSignalSound(activeCandlePrediction.direction);
           }
+        } else {
+          // Safe default: when ML server is offline or no fresh signal arrived, stay on WAIT
+          activeCandlePrediction = {
+            pair: currentPair,
+            direction: 'WAIT',
+            signal: 'WAIT',
+            confidence: 50,
+            candleMinuteStr: currentMinStr,
+            candleStartBucket: currentMinuteBucket,
+            candleStartTime: now,
+            entry_price: exitPHint || currentPrice || getBasePriceForPair(currentPair),
+            timeframe: currentTimeframe || '1m',
+            recommended_duration: tInfo.tfSec || 60,
+            reasons: ['Awaiting fresh candle analysis from ML Server'],
+            isLocked: true
+          };
         }
 
         // 3. Evaluate completed candle outcome with delay so tick buffer
