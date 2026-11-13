@@ -541,7 +541,7 @@ async def get_signals(limit: int = Query(50, ge=1, le=200), db: Session = Depend
 
 @router.get('/indicators')
 async def get_indicators(db: Session = Depends(get_db)):
-    """Return list of all 33 indicator feature names plus the latest calculated breakdown."""
+    """Return list of all 38 indicator feature names plus the latest calculated breakdown."""
     latest_sig = db.query(Signal).order_by(Signal.timestamp.desc()).first()
     latest_breakdown = json.loads(latest_sig.indicators_json) if (latest_sig and latest_sig.indicators_json) else {
         'rsi_14': {'value': 35.0, 'signal': 'NEUTRAL'},
@@ -552,7 +552,7 @@ async def get_indicators(db: Session = Depends(get_db)):
     }
     return {
         'indicators': FEATURE_COLUMNS,
-        'count': len(FEATURE_COLUMNS),  # 33 feature columns
+        'count': len(FEATURE_COLUMNS),  # 38 feature columns
         'latest': latest_breakdown
     }
 
