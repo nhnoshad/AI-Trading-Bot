@@ -422,6 +422,11 @@ class AdaptiveLearner:
                     # Fast stochastic online gradient step
                     self.mlp_model.partial_fit(scaled_row, target_label)
 
+                    # Real user live trade: apply 2 extra gradient steps for highest priority learning
+                    if source == 'live_trade':
+                        self.mlp_model.partial_fit(scaled_row, target_label)
+                        self.mlp_model.partial_fit(scaled_row, target_label)
+
                     # If model made high-confidence mistake, apply 2 extra gradient steps to correct decision boundary
                     c_val = float(confidence) if confidence else 65.0
                     if not was_correct and (c_val >= 70.0 or c_val >= 0.70):
