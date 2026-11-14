@@ -1,8 +1,8 @@
 {
   "EURUSD": {
-    "wins": 5,
-    "total": 5,
-    "ema_acc": 0.7638
+    "wins": 4,
+    "total": 4,
+    "ema_acc": 0.7376
   },
   "AUD/USD (OTC)": {
     "wins": 1,
@@ -60,9 +60,9 @@
     "ema_acc": 0.64
   },
   "USD/JPY (OTC)": {
-    "wins": 33,
-    "total": 70,
-    "ema_acc": 0.3888
+    "wins": 35,
+    "total": 82,
+    "ema_acc": 0.2068
   },
   "USD/CHF (OTC)": {
     "wins": 13,

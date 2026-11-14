@@ -91,9 +91,8 @@ export default function TradeHistory() {
           value={filter.mode}
           onChange={e => setFilter(f => ({ ...f, mode: e.target.value }))}
         >
-          <option value="ALL">All Modes</option>
+          <option value="ALL">All Predictions</option>
           <option value="PREDICTION">Prediction</option>
-          <option value="MANUAL">Manual</option>
         </select>
         <span className="ml-auto text-xs text-gray-500 self-center">{filtered.length} trades</span>
       </div>

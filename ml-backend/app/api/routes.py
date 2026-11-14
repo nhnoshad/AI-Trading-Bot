@@ -223,7 +223,7 @@ async def log_trade(request: LogTradeRequest, db: Session = Depends(get_db)):
         exit_price=request.exit_price,
         result=request.result,
         pnl=calc_pnl,
-        mode='MANUAL'  # Strictly MANUAL — Auto trading is permanently disabled
+        mode=request.mode if request.mode in ('PREDICTION', 'TEST') else 'PREDICTION'
     )
     db.add(trade)
     db.commit()
@@ -481,13 +481,11 @@ async def get_trades(
     db: Session = Depends(get_db)
 ):
     """Return trade history with optional filters and distinct pair catalog."""
-    q = db.query(Trade)
+    q = db.query(Trade).filter(Trade.mode == 'PREDICTION')
     if pair and pair != 'ALL':
         q = q.filter(Trade.pair == pair)
     if result and result != 'ALL':
         q = q.filter(Trade.result == result)
-    if mode and mode != 'ALL':
-        q = q.filter(Trade.mode == mode)
     rows = q.order_by(Trade.id.desc()).limit(limit).all()
     all_pairs = [p[0] for p in db.query(Trade.pair).distinct().all() if p[0]]
     all_pairs.sort()

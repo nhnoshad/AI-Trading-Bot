@@ -9,17 +9,17 @@ def clean_database():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
 
-    c.execute("SELECT count(*) FROM trades WHERE mode = 'MANUAL'")
-    manual_count = c.fetchone()[0]
-    print(f"Manual trades before: {manual_count}")
+    c.execute("SELECT count(*) FROM trades WHERE mode != 'PREDICTION'")
+    non_pred_count = c.fetchone()[0]
+    print(f"Non-prediction trades before: {non_pred_count}")
 
     c.execute("SELECT count(*) FROM learning_samples WHERE source = 'live_trade'")
     live_samples = c.fetchone()[0]
     print(f"Live trade samples before: {live_samples}")
 
-    c.execute("DELETE FROM trades WHERE mode = 'MANUAL'")
+    c.execute("DELETE FROM trades WHERE mode != 'PREDICTION'")
     deleted_trades = c.rowcount
-    print(f"Deleted {deleted_trades} MANUAL trades from trades table.")
+    print(f"Deleted {deleted_trades} non-prediction trades from trades table.")
 
     c.execute("DELETE FROM learning_samples WHERE source = 'live_trade'")
     deleted_samples = c.rowcount

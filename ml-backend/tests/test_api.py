@@ -14,7 +14,7 @@ BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, BASE_DIR)
 
 from app.main import app
-from app.core.database import init_db
+from app.core.database import init_db, SessionLocal, Trade, Signal, LearningSample
 from app.services.indicators import calculate_indicators, FEATURE_COLUMNS
 
 init_db()
@@ -74,22 +74,36 @@ def test_predict_and_outcome_learning_cycle():
     assert 'reasons' in pred
 
     # Now log a trade result linked to this signal and verify adaptive learning
-    trade_resp = client.post('/api/log-trade', json={
-        'signal_id': pred['signal_id'],
-        'pair': 'EURUSD',
-        'direction': 'BUY',
-        'amount': 10.0,
-        'duration': 60,
-        'entry_price': pred['entry_price'],
-        'exit_price': pred['entry_price'] + 0.0005,
-        'result': 'WIN',
-        'mode': 'MANUAL'
-    })
-    assert trade_resp.status_code == 200
-    t_data = trade_resp.json()
-    assert t_data['logged'] is True
-    assert t_data['learning_update']['learned'] is True
-    assert t_data['learning_update']['sample_saved'] is True
+    trade_id = None
+    try:
+        trade_resp = client.post('/api/log-trade', json={
+            'signal_id': pred['signal_id'],
+            'pair': 'EURUSD',
+            'direction': 'BUY',
+            'amount': 10.0,
+            'duration': 60,
+            'entry_price': pred['entry_price'],
+            'exit_price': pred['entry_price'] + 0.0005,
+            'result': 'WIN',
+            'mode': 'PREDICTION'
+        })
+        assert trade_resp.status_code == 200
+        t_data = trade_resp.json()
+        assert t_data['logged'] is True
+        assert t_data['learning_update']['learned'] is True
+        assert t_data['learning_update']['sample_saved'] is True
+        trade_id = t_data.get('trade', {}).get('id')
+    finally:
+        db = SessionLocal()
+        try:
+            if trade_id:
+                db.query(Trade).filter(Trade.id == trade_id).delete()
+            if pred.get('signal_id'):
+                db.query(Signal).filter(Signal.id == pred['signal_id']).delete()
+                db.query(LearningSample).filter(LearningSample.signal_id == pred['signal_id']).delete()
+            db.commit()
+        finally:
+            db.close()
 
 
 def test_stats_trades_signals_and_performance():

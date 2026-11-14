@@ -224,8 +224,7 @@
               <option value="LOSS">LOSS</option>
             </select>
             <select id="flt-mode" onchange="renderTradesTable()" class="bg-[#0d0d1a] border border-[#2a2a3e] rounded-lg px-3 py-1.5 text-xs text-white">
-              <option value="ALL">All Modes</option>
-              <option value="MANUAL">MANUAL</option>
+              <option value="ALL">All Outcomes</option>
               <option value="PREDICTION">PREDICTION</option>
             </select>
           </div>
@@ -731,7 +730,7 @@
           duration: 60,
           entry_price: sig.entry_price || 1.0854,
           result,
-          mode: 'MANUAL'
+          mode: 'PREDICTION'
         })
       });
       await refreshAll();
