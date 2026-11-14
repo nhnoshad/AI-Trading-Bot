@@ -1,8 +1,8 @@
 {
   "EURUSD": {
-    "wins": 4,
-    "total": 4,
-    "ema_acc": 0.7376
+    "wins": 5,
+    "total": 5,
+    "ema_acc": 0.7638
   },
   "AUD/USD (OTC)": {
     "wins": 1,
@@ -30,9 +30,9 @@
     "ema_acc": 0.54
   },
   "NZD/USD (OTC)": {
-    "wins": 4,
-    "total": 8,
-    "ema_acc": 0.5309
+    "wins": 17,
+    "total": 30,
+    "ema_acc": 0.4666
   },
   "CAD/JPY": {
     "wins": 1,
@@ -48,5 +48,25 @@
     "wins": 8,
     "total": 16,
     "ema_acc": 0.454
+  },
+  "Binance Coin (OTC)": {
+    "wins": 1,
+    "total": 6,
+    "ema_acc": 0.4189
+  },
+  "Ethereum Classic (OTC)": {
+    "wins": 1,
+    "total": 1,
+    "ema_acc": 0.64
+  },
+  "USD/JPY (OTC)": {
+    "wins": 33,
+    "total": 70,
+    "ema_acc": 0.3888
+  },
+  "USD/CHF (OTC)": {
+    "wins": 13,
+    "total": 24,
+    "ema_acc": 0.5723
   }
 }

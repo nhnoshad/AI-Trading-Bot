@@ -119,30 +119,6 @@
           if (m && m[1]) {
             privateActiveWsAsset = m[1];
           }
-
-          // Intercept User Live Trade Orders (High-Priority AI Learning)
-          if (/orders\/open|deal\/open|"command"\s*:\s*"open"|"action"\s*:\s*"(call|put|buy|sell)"/i.test(data)) {
-            try {
-              let tradeDir = null;
-              if (/"action"\s*:\s*"(call|buy|up)"/i.test(data) || /"dir"\s*:\s*"(call|buy|up)"/i.test(data)) tradeDir = 'BUY';
-              else if (/"action"\s*:\s*"(put|sell|down)"/i.test(data) || /"dir"\s*:\s*"(put|sell|down)"/i.test(data)) tradeDir = 'SELL';
-
-              const amtMatch = data.match(/"amount"\s*:\s*([0-9.]+)/i);
-              const amount = amtMatch ? parseFloat(amtMatch[1]) : 1.0;
-              const assetMatch = data.match(/"asset"\s*:\s*"([^"]+)"/i);
-              const tradeAsset = assetMatch ? assetMatch[1] : privateActiveWsAsset;
-
-              if (tradeDir) {
-                window.postMessage({
-                  source: 'AI_BOT_USER_TRADE_ENTERED',
-                  asset: tradeAsset,
-                  direction: tradeDir,
-                  amount: amount,
-                  timestamp: Date.now()
-                }, '*');
-              }
-            } catch (e) {}
-          }
         }
       } catch (e) {}
       return origSend.apply(this, arguments);

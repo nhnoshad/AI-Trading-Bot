@@ -1,6 +1,6 @@
 {
-  "version": "1.0.0",
-  "trained_at": "2026-11-11T21:22:13.078573",
+  "version": "1.0.1",
+  "trained_at": "2026-11-14T08:55:35.080874Z",
   "features": [
     "rsi_14",
     "rsi_7",
@@ -41,8 +41,120 @@
     "candle_cluster_bull",
     "price_velocity"
   ],
-  "n_samples": 3435,
-  "train_size": 2748,
-  "test_size": 687,
-  "accuracy": 0.5589519650655022
+  "n_samples": 3571,
+  "train_size": 2856,
+  "test_size": 715,
+  "accuracy": 0.5678,
+  "precision": 0.6334,
+  "recall": 0.6106,
+  "f1_score": 0.6218,
+  "confusion_matrix": [
+    [
+      152,
+      147
+    ],
+    [
+      162,
+      254
+    ]
+  ],
+  "sub_models": [
+    {
+      "model": "XGBoost",
+      "accuracy": "55.7%",
+      "precision": "62.9%",
+      "recall": "57.9%",
+      "f1": "60.3%",
+      "weight": "16%",
+      "status": "Active"
+    },
+    {
+      "model": "LightGBM",
+      "accuracy": "54.7%",
+      "precision": "63.4%",
+      "recall": "52.4%",
+      "f1": "57.4%",
+      "weight": "16%",
+      "status": "Active"
+    },
+    {
+      "model": "CatBoost",
+      "accuracy": "52.2%",
+      "precision": "62.1%",
+      "recall": "45.7%",
+      "f1": "52.6%",
+      "weight": "15%",
+      "status": "Active"
+    },
+    {
+      "model": "Random Forest",
+      "accuracy": "55.5%",
+      "precision": "63.0%",
+      "recall": "57.0%",
+      "f1": "59.8%",
+      "weight": "30%",
+      "status": "Active"
+    },
+    {
+      "model": "Deep MLP Neural Net",
+      "accuracy": "56.5%",
+      "precision": "64.8%",
+      "recall": "55.3%",
+      "f1": "59.7%",
+      "weight": "21%",
+      "status": "Active"
+    }
+  ],
+  "feature_importance": [
+    {
+      "feature": "rsi_14",
+      "importance": 10.13
+    },
+    {
+      "feature": "stoch_d",
+      "importance": 8.44
+    },
+    {
+      "feature": "stoch_k",
+      "importance": 8.09
+    },
+    {
+      "feature": "rsi_7",
+      "importance": 4.86
+    },
+    {
+      "feature": "adx",
+      "importance": 4.38
+    },
+    {
+      "feature": "williams_r",
+      "importance": 4.37
+    },
+    {
+      "feature": "bb_position",
+      "importance": 4.27
+    },
+    {
+      "feature": "volume_sma_ratio",
+      "importance": 4.13
+    },
+    {
+      "feature": "cci",
+      "importance": 3.72
+    },
+    {
+      "feature": "macd_hist",
+      "importance": 3.48
+    },
+    {
+      "feature": "atr_14",
+      "importance": 2.99
+    },
+    {
+      "feature": "price_change_5",
+      "importance": 2.93
+    }
+  ],
+  "retention_days": 35,
+  "elapsed_sec": 39.34
 }

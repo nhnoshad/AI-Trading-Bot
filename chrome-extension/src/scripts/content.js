@@ -510,60 +510,8 @@
           });
         }
       });
-    } else if (msg.source === 'AI_BOT_USER_TRADE_ENTERED') {
-      const uPair = normalizePairName(msg.asset || currentPair);
-      const uDir = msg.direction;
-      const uAmt = msg.amount || 1.0;
-      handleUserLiveTradeEntered(uPair, uDir, uAmt);
     }
   });
-
-  let lastLoggedUserTradeTs = 0;
-  function handleUserLiveTradeEntered(pair, direction, amount = 1.0) {
-    const now = Date.now();
-    if (now - lastLoggedUserTradeTs < 2500) return; // Prevent duplicate debounce
-    lastLoggedUserTradeTs = now;
-
-    const targetPair = normalizePairName(pair || currentPair);
-    const livePrice = resolveLivePriceForPair(targetPair) || currentPrice || 0;
-    const tfSec = getEffectiveTimeframeSeconds();
-
-    console.log(`[AI Bot] 🔥 USER LIVE TRADE DETECTED: ${direction} $${amount} on ${targetPair} @ ${livePrice}`);
-
-    showOverlayNotice(`🔥 USER TRADE PLACED: ${direction} $${amount} on ${targetPair} — High-Priority AI Learning!`);
-
-    // Flash overlay border with glowing feedback
-    if (overlayElement) {
-      overlayElement.style.borderColor = direction === 'BUY' ? '#00ff88' : '#ff3366';
-      overlayElement.style.boxShadow = direction === 'BUY'
-        ? '0 0 28px rgba(0, 255, 136, 0.7)'
-        : '0 0 28px rgba(255, 51, 102, 0.7)';
-      setTimeout(() => {
-        if (overlayElement) {
-          overlayElement.style.borderColor = 'rgba(0, 212, 255, 0.35)';
-          overlayElement.style.boxShadow = '0 10px 40px rgba(0, 0, 0, 0.7)';
-        }
-      }, 3500);
-    }
-
-    // Log user trade to backend with HIGH PRIORITY for immediate neural weight adaptation
-    safeSendMessage({
-      type: 'LOG_TRADE',
-      payload: {
-        pair: targetPair,
-        direction: direction,
-        amount: amount,
-        duration: tfSec,
-        entry_price: livePrice,
-        result: 'PENDING',
-        mode: 'MANUAL',
-        priority: 'HIGH',
-        source: 'live_trade'
-      }
-    }, (resp) => {
-      console.log('[AI Bot] User trade logged to ML backend:', resp);
-    });
-  }
 
   function aggregateTickToCandle(pair, price, ts) {
     const p = parseFloat(price);
@@ -1128,30 +1076,6 @@
               switchTimeframe(detectedTf, true);
             }
           }, 150);
-        }
-      }
-
-      // Detect User Live Trade Placed via Quotex Buy / Sell Button Click
-      const btnEl = clickedEl.closest ? clickedEl.closest('button, [role="button"], .button, .btn-call, .btn-put, [class*="call"], [class*="put"]') : null;
-      if (btnEl && !btnEl.closest('#ai-trading-overlay') && !btnEl.closest('#ai-bot-overlay')) {
-        const btnTxt = (btnEl.textContent || '').trim().toLowerCase();
-        const btnCls = (typeof btnEl.className === 'string' ? btnEl.className : '').toLowerCase();
-        let tradeDir = null;
-
-        if (btnCls.includes('call') || btnCls.includes('button--green') || btnCls.includes('button-call') || /^(buy|call|up)$/i.test(btnTxt)) {
-          tradeDir = 'BUY';
-        } else if (btnCls.includes('put') || btnCls.includes('button--red') || btnCls.includes('button-put') || /^(sell|put|down)$/i.test(btnTxt)) {
-          tradeDir = 'SELL';
-        }
-
-        if (tradeDir) {
-          let amt = 1.0;
-          const invEl = document.querySelector('input[data-qa="investment"], [class*="investment"] input, .input-control input, input[name="amount"]');
-          if (invEl && invEl.value) {
-            const parsedAmt = parseFloat(invEl.value.replace(/[^0-9.]/g, ''));
-            if (!isNaN(parsedAmt) && parsedAmt > 0) amt = parsedAmt;
-          }
-          handleUserLiveTradeEntered(currentPair, tradeDir, amt);
         }
       }
       setTimeout(checkStateSwitch, 250);
