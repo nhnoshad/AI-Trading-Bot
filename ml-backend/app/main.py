@@ -49,17 +49,27 @@ def _start_port_3000_server():
         logger.info('Port 3000 already in use; dashboard also available at http://localhost:8000/dashboard')
 
 
+def _warmup_predictor():
+    try:
+        from app.services.predictor import get_predictor
+        p = get_predictor()
+        logger.info('>>> ML Ensemble Models Fully Loaded & Online! <<<')
+    except Exception as e:
+        logger.error(f'Error during predictor warmup: {e}')
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     logger.info('Starting AI Trading Bot API...')
     init_db()
-    from app.services.predictor import get_predictor
-    get_predictor()
     # Start dashboard on port 3000
-    t = threading.Thread(target=_start_port_3000_server, daemon=True)
-    t.start()
-    logger.info('API and Web Dashboard ready.')
+    t3000 = threading.Thread(target=_start_port_3000_server, daemon=True)
+    t3000.start()
+    # Warm up ML predictor models in background so port 8000 opens in <2 seconds!
+    t_warmup = threading.Thread(target=_warmup_predictor, daemon=True)
+    t_warmup.start()
+    logger.info('API Server Live on http://localhost:8000 & Web Dashboard at http://localhost:8000/dashboard')
     yield
     # Shutdown (nothing to clean up)
 

@@ -2,13 +2,16 @@
 Unified Quick-Start Launcher for AI Trading Signal Bot
 Starts BOTH:
   1. FastAPI ML Backend Server on http://localhost:8000
-  2. Interactive Web Dashboard on http://localhost:3000 (and http://localhost:8000/dashboard)
+  2. Interactive Web Dashboard on http://localhost:8000/dashboard (and http://localhost:3000)
 No Node.js or npm installation required!
 """
 
 import os
 import sys
 import threading
+import time
+import subprocess
+import webbrowser
 import uvicorn
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from app.core.config import settings
@@ -37,18 +40,9 @@ class _DashboardHandler(SimpleHTTPRequestHandler):
 def _start_port_3000_dashboard():
     try:
         server = HTTPServer(('0.0.0.0', 3000), _DashboardHandler)
-        print('============================================================')
-        print('  [*] Web Dashboard Live at : http://localhost:3000')
-        print('  [*] ML Backend API Live at: http://localhost:8000')
-        print('  [*] Swagger API Docs at   : http://localhost:8000/docs')
-        print('============================================================')
         server.serve_forever()
     except OSError:
-        print('  [i] Port 3000 already in use; Dashboard also available at http://localhost:8000/dashboard')
-
-
-import time
-import subprocess
+        pass
 
 
 def free_ports(*ports):
@@ -63,22 +57,41 @@ def free_ports(*ports):
                     parts = line.strip().split()
                     pid = int(parts[-1])
                     if pid != current_pid and pid > 0:
-                        print(f'[*] Freeing occupied port {port} (PID {pid})...')
+                        print(f'[*] Freeing occupied port {port} (PID {pid})...', flush=True)
                         subprocess.run(f'taskkill /F /PID {pid}', shell=True, capture_output=True)
                         killed = True
         except Exception:
             pass
     if killed:
-        time.sleep(1.2)
+        time.sleep(1.0)
+
+
+def _auto_open_browser():
+    """Waits for server to start, then automatically opens the dashboard in the default browser."""
+    time.sleep(2.0)
+    try:
+        webbrowser.open('http://localhost:8000/dashboard')
+    except Exception:
+        pass
 
 
 if __name__ == '__main__':
     free_ports(8000, 3000)
+
+    print('============================================================', flush=True)
+    print('  [*] Starting AI Trading Bot ML Backend Server...', flush=True)
+    print('  [*] ML Backend API : http://localhost:8000', flush=True)
+    print('  [*] Web Dashboard  : http://localhost:8000/dashboard', flush=True)
+    print('  [*] Swagger Docs   : http://localhost:8000/docs', flush=True)
+    print('  [*] Opening Dashboard in your browser...', flush=True)
+    print('============================================================', flush=True)
+
+    threading.Thread(target=_auto_open_browser, daemon=True).start()
 
     uvicorn.run(
         'app.main:app',
         host=settings.HOST,
         port=settings.PORT,
         reload=False,
-        log_level='debug' if settings.DEBUG else 'info'
+        log_level='info'
     )
