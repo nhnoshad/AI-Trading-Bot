@@ -153,6 +153,8 @@ class AdaptiveLearner:
                         self.mlp_model.best_loss_ = self.mlp_model.loss_curve_[-1]
                     else:
                         self.mlp_model.best_loss_ = 1.0
+                # Set batch_size='auto' so scikit-learn suppresses UserWarning during single-sample partial_fit
+                self.mlp_model.batch_size = 'auto'
             if os.path.exists(scaler_path):
                 self.scaler = joblib.load(scaler_path)
             if os.path.exists(meta_path):
