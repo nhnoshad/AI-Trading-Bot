@@ -1,22 +1,46 @@
 @echo off
-echo ===================================================
-echo   AI Trading Signal Bot - ML Backend Launcher
-echo ===================================================
-cd /d "%~dp0"
+title AI Trading Bot - ML Backend Server
+setlocal enabledelayedexpansion
 
-if not exist "venv\Scripts\python.exe" (
-    echo [1/4] Creating Python virtual environment...
-    python -m venv venv
+echo ===================================================
+echo   AI Trading Bot - ML Backend Server Launcher
+echo ===================================================
+
+:: 1. Search for ml-backend in multiple possible locations
+set "TARGET_DIR="
+
+if exist "%~dp0ml-backend\venv\Scripts\python.exe" (
+    set "TARGET_DIR=%~dp0ml-backend"
+) else if exist "%~dp0venv\Scripts\python.exe" (
+    set "TARGET_DIR=%~dp0"
+) else if exist "%~dp0AI-Trading-Bot\ml-backend\venv\Scripts\python.exe" (
+    set "TARGET_DIR=%~dp0AI-Trading-Bot\ml-backend"
+) else if exist "C:\Users\ASUS\OneDrive\Documents\AI-Trading-Bot\ml-backend\venv\Scripts\python.exe" (
+    set "TARGET_DIR=C:\Users\ASUS\OneDrive\Documents\AI-Trading-Bot\ml-backend"
+) else if exist "%USERPROFILE%\OneDrive\Documents\AI-Trading-Bot\ml-backend\venv\Scripts\python.exe" (
+    set "TARGET_DIR=%USERPROFILE%\OneDrive\Documents\AI-Trading-Bot\ml-backend"
+) else if exist "%USERPROFILE%\Documents\AI-Trading-Bot\ml-backend\venv\Scripts\python.exe" (
+    set "TARGET_DIR=%USERPROFILE%\Documents\AI-Trading-Bot\ml-backend"
 )
 
-echo [2/4] Ensuring dependencies are installed...
-.\venv\Scripts\python.exe -m pip install --prefer-binary -r requirements.txt
-
-if not exist "models\ensemble_model.pkl" (
-    echo [3/4] Bootstrapping 35-day learning memory and training initial ML models...
-    .\venv\Scripts\python.exe scripts/training/bootstrap_initial_models.py
+if not defined TARGET_DIR (
+    echo [ERROR] Could not locate AI-Trading-Bot\ml-backend directory!
+    echo Please make sure the AI-Trading-Bot repository exists in your Documents folder.
+    pause
+    exit /b 1
 )
 
-echo [4/4] Starting FastAPI ML Server on http://localhost:8000 ...
-.\venv\Scripts\python.exe run.py
+echo [*] Target Directory: !TARGET_DIR!
+cd /d "!TARGET_DIR!"
+
+echo [*] Python Venv Found: !TARGET_DIR!\venv\Scripts\python.exe
+echo [*] ML Server: http://localhost:8000
+echo [*] Dashboard: http://localhost:8000/dashboard (and http://localhost:3000)
+echo ===================================================
+echo [*] Starting server... Please wait a few seconds for ML models to load...
+echo ===================================================
+
+set PYTHONUNBUFFERED=1
+".\venv\Scripts\python.exe" run.py
+
 pause
