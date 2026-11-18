@@ -93,8 +93,8 @@ def load_and_process_data(csv_path: str) -> tuple:
 
 def compute_financial_sample_weights(
     df: pd.DataFrame,
-    retention_days: int = 35,
-    half_life_days: float = 10.0,
+    retention_days: int = 90,
+    half_life_days: float = 14.0,
     live_trade_boost: float = 3.0,
     error_penalty_boost: float = 4.0,
     high_conf_threshold: float = 0.70

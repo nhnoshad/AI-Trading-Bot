@@ -23,7 +23,7 @@ export default function ModelPerformance() {
         f1_score: 61.1,
         confusion_matrix: [[145, 92], [88, 155]],
         rolling_accuracy: { last_24h: 63.2, last_7d: 61.8, last_30d: 61.4, live_verified_count: 42 },
-        memory_buffer: { retention_days: 35, total_samples_stored: 1500, outcomes_since_last_retrain: 5, next_auto_retrain_in: 20 },
+        memory_buffer: { retention_days: 90, total_samples_stored: 1500, outcomes_since_last_retrain: 5, next_auto_retrain_in: 20 },
         dynamic_weights: { xgb: 0.30, lgbm: 0.25, rf: 0.20, cb: 0.25 },
         sub_models: [
           { model: 'XGBoost', accuracy: '61.8%', precision: '62.5%', recall: '60.4%', f1: '61.4%', weight: '30%', status: 'Active' },
@@ -125,10 +125,10 @@ export default function ModelPerformance() {
           <div className="grid grid-cols-3 gap-3 text-center">
             <div className="bg-[#0d0d1a] p-3 rounded-lg">
               <div className="text-lg font-bold text-white">{perf.memory_buffer?.total_samples_stored || 0}</div>
-              <div className="text-[11px] text-gray-500">1-Month Samples</div>
+              <div className="text-[11px] text-gray-500">3-Month Samples</div>
             </div>
             <div className="bg-[#0d0d1a] p-3 rounded-lg">
-              <div className="text-lg font-bold text-[#00d4ff]">{perf.memory_buffer?.retention_days || 35} Days</div>
+              <div className="text-lg font-bold text-[#00d4ff]">{perf.memory_buffer?.retention_days || 90} Days</div>
               <div className="text-[11px] text-gray-500">Rolling Window</div>
             </div>
             <div className="bg-[#0d0d1a] p-3 rounded-lg">

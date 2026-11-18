@@ -51,8 +51,8 @@ os.makedirs(DATA_DIR, exist_ok=True)
 
 def compute_financial_sample_weights(
     df: pd.DataFrame,
-    retention_days: int = 35,
-    half_life_days: float = 10.0,
+    retention_days: int = 90,
+    half_life_days: float = 14.0,
     live_trade_boost: float = 3.0,
     error_penalty_boost: float = 4.0,
     high_conf_threshold: float = 0.70
@@ -113,7 +113,7 @@ class AdaptiveLearner:
     """
 
     def __init__(self):
-        self.retention_days = 35  # Keep at least 1 full month (35 days) of learning data
+        self.retention_days = 90  # Keep 3 full months (90 days) of rolling market learning data
         self.weights = self._load_weights()
         self.outcomes_since_last_retrain = 0
         self.auto_retrain_every_n_outcomes = 50   # Raised 15→50: retrain after meaningful data accumulates

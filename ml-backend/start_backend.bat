@@ -1,57 +1,22 @@
 @echo off
-title AI Trading Bot - ML Backend Server
-setlocal enabledelayedexpansion
-
 echo ===================================================
-echo   Starting AI Trading Bot ML Backend Server
+echo   AI Trading Signal Bot - ML Backend Launcher
 echo ===================================================
+cd /d "%~dp0"
 
-set "PROJ_DIR="
-
-if exist "%~dp0venv\Scripts\python.exe" (
-    set "PROJ_DIR=%~dp0"
-)
-if not defined PROJ_DIR (
-    if exist "%~dp0ml-backend\venv\Scripts\python.exe" (
-        set "PROJ_DIR=%~dp0ml-backend"
-    )
-)
-if not defined PROJ_DIR (
-    if exist "C:\Users\ASUS\OneDrive\Documents\AI-Trading-Bot\ml-backend\venv\Scripts\python.exe" (
-        set "PROJ_DIR=C:\Users\ASUS\OneDrive\Documents\AI-Trading-Bot\ml-backend"
-    )
-)
-if not defined PROJ_DIR (
-    if exist "%USERPROFILE%\OneDrive\Documents\AI-Trading-Bot\ml-backend\venv\Scripts\python.exe" (
-        set "PROJ_DIR=%USERPROFILE%\OneDrive\Documents\AI-Trading-Bot\ml-backend"
-    )
-)
-if not defined PROJ_DIR (
-    if exist "%USERPROFILE%\Documents\AI-Trading-Bot\ml-backend\venv\Scripts\python.exe" (
-        set "PROJ_DIR=%USERPROFILE%\Documents\AI-Trading-Bot\ml-backend"
-    )
+if not exist "venv\Scripts\python.exe" (
+    echo [1/4] Creating Python virtual environment...
+    python -m venv venv
 )
 
-if not defined PROJ_DIR (
-    echo [ERROR] Could not find python virtual environment.
-    echo Please make sure AI-Trading-Bot is in your Documents folder.
-    pause
-    exit /b 1
+echo [2/4] Ensuring dependencies are installed...
+.\venv\Scripts\python.exe -m pip install --prefer-binary -r requirements.txt
+
+if not exist "models\ensemble_model.pkl" (
+    echo [3/4] Bootstrapping 35-day learning memory and training initial ML models...
+    .\venv\Scripts\python.exe scripts/training/bootstrap_initial_models.py
 )
 
-cd /d "!PROJ_DIR!"
-echo [*] Working Directory: !PROJ_DIR!
-echo [*] ML Server: http://localhost:8000
-echo [*] Dashboard: http://localhost:8000/dashboard
-echo ===================================================
-echo [*] Launching server... Opening dashboard in browser...
-echo ===================================================
-
-set PYTHONUNBUFFERED=1
-".\venv\Scripts\python.exe" run.py
-if errorlevel 1 (
-    echo.
-    echo [ERROR] Server exited with code %errorlevel%.
-    pause
-)
+echo [4/4] Starting FastAPI ML Server on http://localhost:8000 ...
+.\venv\Scripts\python.exe run.py
 pause

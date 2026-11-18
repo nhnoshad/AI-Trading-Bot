@@ -842,7 +842,7 @@
       document.getElementById('mp-f1').textContent = p.f1_score + '%';
 
       document.getElementById('mp-mem-samples').textContent = p.memory_buffer?.total_samples_stored || 3000;
-      document.getElementById('mp-mem-days').textContent = (p.memory_buffer?.retention_days || 35) + ' Days';
+      document.getElementById('mp-mem-days').textContent = (p.memory_buffer?.retention_days || 90) + ' Days';
       document.getElementById('mp-mem-verified').textContent = p.rolling_accuracy?.live_verified_count || 0;
       document.getElementById('mp-r24').textContent = (p.rolling_accuracy?.last_24h || p.overall_accuracy) + '%';
       document.getElementById('mp-r7').textContent = (p.rolling_accuracy?.last_7d || p.overall_accuracy) + '%';
