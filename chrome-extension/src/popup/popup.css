@@ -99,6 +99,7 @@ body {
 
 .signal-value.buy { color: #00ff88; }
 .signal-value.sell { color: #ff1744; }
+.signal-value.stopped { color: #8892b0; }
 
 .signal-pair {
   font-size: 12px;

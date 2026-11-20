@@ -1629,10 +1629,10 @@
       <div class="ov-body">
         <!-- 1. Prediction & 2. Duration -->
         <div class="ov-prediction-card">
-          <div class="ov-section-label" id="ov-section-label">NEXT CANDLE PREDICTION</div>
-          <div class="ov-signal" id="ov-signal">🔍 SCANNING...</div>
-          <div class="ov-pred-action" id="ov-pred-action">Analyzing pair...</div>
-          <div class="ov-expiry-badge" id="ov-expiry-badge">⏱️ DURATION: 1 MINUTE (60s)</div>
+          <div class="ov-section-label" id="ov-section-label">${isRunning ? 'NEXT CANDLE PREDICTION' : 'AI BOT STATUS'}</div>
+          <div class="ov-signal ${isRunning ? '' : 'stopped'}" id="ov-signal">${isRunning ? '🔍 SCANNING...' : '⏹ BOT STOPPED'}</div>
+          <div class="ov-pred-action" id="ov-pred-action">${isRunning ? 'Analyzing pair...' : 'Bot paused • Click "▶ START AI BOT" to activate'}</div>
+          <div class="ov-expiry-badge" id="ov-expiry-badge" style="${isRunning ? '' : 'background:rgba(255,193,7,0.12);border-color:rgba(255,193,7,0.3);color:#ffc107;'}">⏱️ DURATION: ${(currentTimeframe || '1m').toUpperCase()} (${getTfSeconds(currentTimeframe)}s)${isRunning ? '' : ' • STOPPED'}</div>
         </div>
 
         <!-- 3. Which Pair & 4. Live Price -->
@@ -1847,6 +1847,11 @@
 
     if (!signalEl) return;
 
+    if (!isRunning) {
+      updateOverlayRunningState(false);
+      return;
+    }
+
     // Check whether we have an active locked candle running for this minute
     const isCandleActive = Boolean(activeCandlePrediction && activeCandlePrediction.candleStartBucket === currentMinuteBucket);
 
@@ -2048,6 +2053,12 @@
     if (!overlayElement) return;
     const badge = overlayElement.querySelector('#ov-status-badge');
     const toggleBtn = overlayElement.querySelector('#ov-toggle-bot-btn');
+    const signalEl = overlayElement.querySelector('#ov-signal');
+    const predEl = overlayElement.querySelector('#ov-pred-action');
+    const fabSigEl = overlayElement.querySelector('#ov-fab-sig');
+    const sectionLabelEl = overlayElement.querySelector('#ov-section-label');
+    const expiryEl = overlayElement.querySelector('#ov-expiry-badge');
+
     if (badge) {
       badge.textContent = running ? '▶ RUNNING' : '⏹ STOPPED';
       badge.className = 'ov-status-badge ' + (running ? 'running' : 'stopped');
@@ -2056,7 +2067,28 @@
       toggleBtn.textContent = running ? '⏹ STOP AI BOT' : '▶ START AI BOT';
       toggleBtn.className = 'ov-bot-toggle-btn ' + (running ? 'btn-stop' : 'btn-start');
     }
-    overlayElement.style.opacity = running ? '1' : '0.75';
+    overlayElement.style.opacity = running ? '1' : '0.85';
+
+    if (!running) {
+      if (sectionLabelEl) sectionLabelEl.innerHTML = 'AI BOT STATUS';
+      if (signalEl) {
+        signalEl.textContent = '⏹ BOT STOPPED';
+        signalEl.className = 'ov-signal stopped';
+      }
+      if (predEl) {
+        predEl.textContent = 'Bot paused • Click "▶ START AI BOT" to activate';
+      }
+      if (fabSigEl) {
+        fabSigEl.textContent = 'STOPPED';
+      }
+      if (expiryEl) {
+        expiryEl.innerHTML = `⏱️ DURATION: ${(currentTimeframe || '1m').toUpperCase()} • STOPPED`;
+        expiryEl.style.background = 'rgba(255, 193, 7, 0.12)';
+        expiryEl.style.borderColor = 'rgba(255, 193, 7, 0.3)';
+        expiryEl.style.color = '#ffc107';
+      }
+      overlayElement.style.borderColor = 'rgba(255, 193, 7, 0.4)';
+    }
   }
 
   function updateOverlayCandleCount() {
@@ -2227,6 +2259,7 @@
 
       sendResponse({
         success: true,
+        isRunning: isRunning,
         isCandleActive,
         activeCandleMinute: isCandleActive ? activeCandlePrediction.candleMinuteStr : null,
         nextCandleMinute: nextMinStr,
@@ -2312,19 +2345,16 @@
   });
 
   // Auto-initialize settings on load
-  // By default, initially it is STOPPED until user explicitly clicks START!
+  // ALWAYS initialize in STOPPED state by default on page load / server start!
+  // The bot only begins predicting/running when the user explicitly clicks Start!
   safeStorageGet(
-    ['botRunning', 'tradeAmount', 'tradeDuration', 'minConfidence', 'serverUrl', 'mode', 'soundEnabled'],
+    ['tradeAmount', 'tradeDuration', 'minConfidence', 'serverUrl', 'mode', 'soundEnabled'],
     (data) => {
       botSettings = { ...botSettings, ...data };
-      const shouldRun = Boolean(data && data.botRunning === true);
-      if (shouldRun) {
-        startBot(data);
-      } else {
-        stopBot();
-        createOverlay();
-        updateOverlayRunningState(false);
-      }
+      stopBot();
+      createOverlay();
+      updateOverlayRunningState(false);
+      safeStorageSet({ botRunning: false });
     }
   );
 })();

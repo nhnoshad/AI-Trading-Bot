@@ -83,10 +83,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (data.currentTimeframe) {
       updateActiveTfUI(data.currentTimeframe);
     }
-    if (data.currentCandleState) {
-      renderCandlePredictionState(data.currentCandleState);
-    } else if (data.lastSignal) {
-      renderSignal(data.lastSignal);
+    if (botRunning) {
+      if (data.currentCandleState) {
+        renderCandlePredictionState(data.currentCandleState);
+      } else if (data.lastSignal) {
+        renderSignal(data.lastSignal);
+      }
     }
   });
 
@@ -96,6 +98,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Live 1-second countdown synchronized with wall-clock minutes and locked candle state
   setInterval(() => {
+    if (!botRunning) return;
     const now = Date.now();
     const tfSec = getTfSeconds(currentTimeframe);
     const tfMs = tfSec * 1000;
@@ -236,6 +239,10 @@ async function syncWithActiveTab(forceRescan = false) {
     }
 
     if (response && response.success) {
+      if (response.isRunning !== undefined) {
+        botRunning = Boolean(response.isRunning);
+        updateBotStatusUI();
+      }
       if (response.timeframe) updateActiveTfUI(response.timeframe);
       renderCandlePredictionState(response);
       return;
@@ -451,7 +458,7 @@ async function loadSettings() {
 
     botRunning = data.botRunning !== undefined ? Boolean(data.botRunning) : false;
     updateBotStatusUI();
-    if (data.lastSignal) renderSignal(data.lastSignal);
+    if (data.lastSignal && botRunning) renderSignal(data.lastSignal);
   });
 }
 
@@ -529,6 +536,27 @@ function renderCandlePredictionState(state) {
   const scanBtn = document.getElementById('btnScanNow');
 
   if (!card || !val) return;
+
+  if (!botRunning) {
+    card.className = 'signal-card wait';
+    if (labelEl) {
+      labelEl.textContent = 'AI BOT STATUS';
+      labelEl.style.color = '#ffc107';
+    }
+    val.textContent = '⏹ BOT STOPPED';
+    val.className = 'signal-value stopped';
+    if (predActionEl) predActionEl.textContent = 'Bot paused • Click "▶ START AI BOT" to activate';
+    if (expiryEl) {
+      expiryEl.textContent = `⏱️ Duration: ${(currentTimeframe || '1m').toUpperCase()} • STOPPED`;
+      expiryEl.style.background = 'rgba(255,193,7,0.12)';
+      expiryEl.style.borderColor = 'rgba(255,193,7,0.3)';
+      expiryEl.style.color = '#ffc107';
+    }
+    if (pairEl && state && state.pair) pairEl.textContent = state.pair;
+    if (fill) fill.style.width = '0%';
+    if (conf) conf.textContent = '--';
+    return;
+  }
 
   if (!state.pair || state.pair === 'No Pair Found' || state.pair === 'No pair detected') {
     card.className = 'signal-card wait';
