@@ -298,7 +298,7 @@ def run_audit():
     print(f"  Outcome recorded: {update_res.get('learned')}")
     print(f"  Ensemble Weights after update: {weights_after}")
 
-    w_sum = sum([weights_after['xgb'], weights_after['lgbm'], weights_after['cb'], weights_after['rf']])
+    w_sum = sum([weights_after['xgb'], weights_after['lgbm'], weights_after['cb'], weights_after['rf'], weights_after.get('mlp', 0.0)])
     if 0.99 <= w_sum <= 1.01:
         print(f"  [PASS] Dynamic weights normalize to 1.0 (Sum={w_sum:.4f}).")
     else:

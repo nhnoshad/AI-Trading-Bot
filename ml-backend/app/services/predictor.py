@@ -568,12 +568,27 @@ class TradingPredictor:
         if micro_ticks:
             m_dir = micro_ticks.get('direction', 'FLAT')
             m_vel = float(micro_ticks.get('velocity', 0.0))
+            m_entropy = float(micro_ticks.get('entropy', 0.50))
+            m_ofi = float(micro_ticks.get('ofi', 0.0))
+            m_intensity = float(micro_ticks.get('intensity', 0.0))
+            m_surge = bool(micro_ticks.get('is_surge', False))
             is_trap = micro_vel.get('last_second_trap', False)
 
             if is_trap and min_confidence_override is None:
                 prediction = -1
                 confidence_raw = 0.48
                 quant_reasons.append("⚡ Quant Rule 4 Trap: Micro-tick algorithmic trap detected in final seconds")
+            elif m_entropy >= 0.88 and abs(m_ofi) < 0.15 and min_confidence_override is None:
+                prediction = -1
+                confidence_raw = 0.50
+                quant_reasons.append(f"⏳ Quant Rule 4 Entropy Guard: High micro-tick disorder ({m_entropy:.2f}) — Whipsaw trap detected")
+            elif min_confidence_override is None and (
+                (prediction == 1 and m_ofi <= -0.50) or (prediction == 0 and m_ofi >= 0.50)
+            ):
+                prediction = -1
+                confidence_raw = 0.49
+                opp_dir = "Bearish" if m_ofi <= -0.50 else "Bullish"
+                quant_reasons.append(f"⚡ Quant Rule 4 OFI Divergence: Heavy opposing tick order flow ({opp_dir} OFI {m_ofi:+.2f}) — Trade blocked")
             elif abs(m_vel) > 0.40 and min_confidence_override is None:
                 if prediction == 1 and (m_dir == 'DOWN' or m_vel < -0.35):
                     prediction = -1
@@ -584,8 +599,16 @@ class TradingPredictor:
                     confidence_raw = 0.49
                     quant_reasons.append("⚡ Quant Rule 4 Trap: Upward tick velocity in final seconds — SELL blocked to prevent wick loss")
                 elif (prediction == 1 and m_dir == 'UP') or (prediction == 0 and m_dir == 'DOWN'):
-                    confidence_raw = min(0.98, confidence_raw + 0.04)
-                    quant_reasons.append("✅ Quant Rule 4 Order Flow: Sub-second micro-tick velocity strongly confirms breakout!")
+                    boost = 0.04
+                    if m_surge and ((prediction == 1 and m_ofi > 0.3) or (prediction == 0 and m_ofi < -0.3)):
+                        boost = 0.06
+                        quant_reasons.append(f"🚀 Quant Rule 4 Order Flow & Surge: Strong OFI ({m_ofi:+.2f}) with {m_intensity:.1f} ticks/s confirms institutional move!")
+                    else:
+                        quant_reasons.append("✅ Quant Rule 4 Order Flow: Sub-second micro-tick velocity strongly confirms breakout!")
+                    confidence_raw = min(0.98, confidence_raw + boost)
+            elif (prediction == 1 and m_ofi > 0.40) or (prediction == 0 and m_ofi < -0.40):
+                confidence_raw = min(0.98, confidence_raw + 0.03)
+                quant_reasons.append(f"✅ Quant Rule 4 Order Flow: Favorable micro tick pressure (OFI {m_ofi:+.2f})")
 
         # Quotex Algorithmic Trend, VSA & Fractal Hurst Synergy
         if not q_exhaustion and prediction != -1:

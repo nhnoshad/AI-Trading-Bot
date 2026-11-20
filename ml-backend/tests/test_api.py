@@ -264,3 +264,73 @@ def test_candlestick_pattern_recognizer():
     assert 'direction' in pred['pattern']
 
 
+def test_micro_tick_order_flow_and_entropy_features():
+    from app.services.quotex_engine import analyze_micro_second_velocity
+    # Test Bullish Order Flow Surge
+    res_surge = analyze_micro_second_velocity({
+        'velocity': 0.80,
+        'acceleration': 0.25,
+        'direction': 'UP',
+        'intensity': 5.5,
+        'is_surge': True,
+        'entropy': 0.35,
+        'ofi': 0.80,
+        'tick_count': 20
+    }, expected_dir='BUY')
+    assert res_surge['micro_confirmed'] is True
+    assert res_surge['last_second_trap'] is False
+    assert any('OFI' in r for r in res_surge['reasons'])
+    assert any('Surge' in r for r in res_surge['reasons'])
+
+    # Test High Entropy Noise Filter
+    res_noise = analyze_micro_second_velocity({
+        'velocity': 0.05,
+        'acceleration': 0.0,
+        'direction': 'FLAT',
+        'intensity': 2.0,
+        'is_surge': False,
+        'entropy': 0.95,
+        'ofi': 0.02,
+        'tick_count': 15
+    }, expected_dir='BUY')
+    assert any('Entropy' in r for r in res_noise['reasons'])
+
+    # Test OFI Divergence Trap Detection
+    res_div = analyze_micro_second_velocity({
+        'velocity': -0.50,
+        'acceleration': -0.1,
+        'direction': 'DOWN',
+        'intensity': 4.0,
+        'is_surge': False,
+        'entropy': 0.42,
+        'ofi': -0.75,
+        'tick_count': 16
+    }, expected_dir='BUY')
+    assert res_div['last_second_trap'] is True
+    assert res_div['micro_confirmed'] is False
+    assert any('Divergence' in r for r in res_div['reasons'])
+
+    # Test /api/predict with micro_ticks payload
+    candles = make_sample_candles(80)
+    resp = client.post('/api/predict', json={
+        'candles': candles,
+        'timeframe': '1m',
+        'pair': 'EURUSD',
+        'micro_ticks': {
+            'velocity': 0.60,
+            'direction': 'UP',
+            'intensity': 4.5,
+            'is_surge': True,
+            'entropy': 0.38,
+            'ofi': 0.65,
+            'tick_count': 18
+        }
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert 'signal' in data
+    assert 'confidence' in data
+    assert 'reasons' in data
+
+
+

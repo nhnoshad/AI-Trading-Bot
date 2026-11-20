@@ -1,8 +1,8 @@
 {
   "EURUSD": {
-    "wins": 4,
-    "total": 4,
-    "ema_acc": 0.7376
+    "wins": 10,
+    "total": 10,
+    "ema_acc": 0.8605
   },
   "AUD/USD (OTC)": {
     "wins": 6,
@@ -10,14 +10,14 @@
     "ema_acc": 0.4658
   },
   "USD/PHP (OTC)": {
-    "wins": 4,
-    "total": 5,
-    "ema_acc": 0.6638
+    "wins": 19,
+    "total": 37,
+    "ema_acc": 0.4278
   },
   "Dash (OTC)": {
-    "wins": 7,
-    "total": 9,
-    "ema_acc": 0.6911
+    "wins": 10,
+    "total": 19,
+    "ema_acc": 0.4128
   },
   "USD/CAD (OTC)": {
     "wins": 0,
@@ -25,9 +25,9 @@
     "ema_acc": 0.2093
   },
   "USD/EGP (OTC)": {
-    "wins": 0,
-    "total": 1,
-    "ema_acc": 0.54
+    "wins": 78,
+    "total": 140,
+    "ema_acc": 0.329
   },
   "NZD/USD (OTC)": {
     "wins": 17,
@@ -40,9 +40,9 @@
     "ema_acc": 0.64
   },
   "EUR/USD": {
-    "wins": 4,
-    "total": 6,
-    "ema_acc": 0.6628
+    "wins": 52,
+    "total": 79,
+    "ema_acc": 0.49
   },
   "EUR/GBP": {
     "wins": 8,
@@ -55,9 +55,9 @@
     "ema_acc": 0.4189
   },
   "Ethereum Classic (OTC)": {
-    "wins": 1,
-    "total": 1,
-    "ema_acc": 0.64
+    "wins": 4,
+    "total": 12,
+    "ema_acc": 0.3416
   },
   "USD/JPY (OTC)": {
     "wins": 35,
@@ -100,34 +100,34 @@
     "ema_acc": 0.7138
   },
   "EUR/NZD (OTC)": {
-    "wins": 5,
-    "total": 15,
-    "ema_acc": 0.3721
+    "wins": 6,
+    "total": 18,
+    "ema_acc": 0.3523
   },
   "USD/PKR (OTC)": {
-    "wins": 3,
-    "total": 8,
-    "ema_acc": 0.4705
+    "wins": 4,
+    "total": 13,
+    "ema_acc": 0.3434
   },
   "USD/IDR (OTC)": {
-    "wins": 13,
-    "total": 24,
-    "ema_acc": 0.5099
+    "wins": 17,
+    "total": 33,
+    "ema_acc": 0.4482
   },
   "NZD/CAD (OTC)": {
-    "wins": 3,
-    "total": 9,
-    "ema_acc": 0.3823
+    "wins": 4,
+    "total": 10,
+    "ema_acc": 0.4441
   },
   "Avalanche (OTC)": {
     "wins": 3,
-    "total": 7,
-    "ema_acc": 0.558
+    "total": 8,
+    "ema_acc": 0.5022
   },
   "Trump (OTC)": {
     "wins": 34,
-    "total": 40,
-    "ema_acc": 0.9737
+    "total": 60,
+    "ema_acc": 0.1185
   },
   "Cosmos (OTC)": {
     "wins": 0,
@@ -145,9 +145,9 @@
     "ema_acc": 0.638
   },
   "USD/BRL (OTC)": {
-    "wins": 0,
-    "total": 14,
-    "ema_acc": 0.1373
+    "wins": 4,
+    "total": 24,
+    "ema_acc": 0.3918
   },
   "GBP/AUD (OTC)": {
     "wins": 15,
@@ -165,9 +165,9 @@
     "ema_acc": 0.3526
   },
   "USD/INR (OTC)": {
-    "wins": 0,
-    "total": 1,
-    "ema_acc": 0.54
+    "wins": 2,
+    "total": 16,
+    "ema_acc": 0.2499
   },
   "EUR/CAD (OTC)": {
     "wins": 3,
@@ -180,9 +180,9 @@
     "ema_acc": 0.4314
   },
   "USD/BDT (OTC)": {
-    "wins": 1,
-    "total": 2,
-    "ema_acc": 0.576
+    "wins": 4,
+    "total": 7,
+    "ema_acc": 0.584
   },
   "USD/DZD (OTC)": {
     "wins": 1,
@@ -190,24 +190,24 @@
     "ema_acc": 0.3401
   },
   "NZD/CHF (OTC)": {
-    "wins": 0,
-    "total": 2,
-    "ema_acc": 0.486
+    "wins": 3,
+    "total": 7,
+    "ema_acc": 0.5499
   },
   "USD/MXN (OTC)": {
     "wins": 0,
-    "total": 1,
-    "ema_acc": 0.54
+    "total": 4,
+    "ema_acc": 0.3937
   },
   "CAD/CHF (OTC)": {
-    "wins": 0,
-    "total": 3,
-    "ema_acc": 0.4374
+    "wins": 2,
+    "total": 8,
+    "ema_acc": 0.4239
   },
   "Bitcoin Cash (OTC)": {
-    "wins": 8,
-    "total": 14,
-    "ema_acc": 0.4766
+    "wins": 9,
+    "total": 17,
+    "ema_acc": 0.4474
   },
   "Solana (OTC)": {
     "wins": 0,
@@ -215,18 +215,63 @@
     "ema_acc": 0.287
   },
   "Ethereum (OTC)": {
-    "wins": 4,
-    "total": 5,
-    "ema_acc": 0.6982
+    "wins": 9,
+    "total": 12,
+    "ema_acc": 0.6966
   },
   "Bitcoin (OTC)": {
-    "wins": 8,
-    "total": 8,
-    "ema_acc": 0.8278
+    "wins": 11,
+    "total": 15,
+    "ema_acc": 0.5935
   },
   "Zcash (OTC)": {
+    "wins": 3,
+    "total": 6,
+    "ema_acc": 0.5164
+  },
+  "USD/ZAR (OTC)": {
+    "wins": 2,
+    "total": 7,
+    "ema_acc": 0.4255
+  },
+  "USD/COP (OTC)": {
+    "wins": 7,
+    "total": 15,
+    "ema_acc": 0.4223
+  },
+  "Litecoin (OTC)": {
+    "wins": 4,
+    "total": 8,
+    "ema_acc": 0.5261
+  },
+  "Chainlink (OTC)": {
     "wins": 1,
+    "total": 11,
+    "ema_acc": 0.2884
+  },
+  "Ripple (OTC)": {
+    "wins": 2,
+    "total": 4,
+    "ema_acc": 0.5476
+  },
+  "USD/ARS (OTC)": {
+    "wins": 3,
+    "total": 6,
+    "ema_acc": 0.5318
+  },
+  "Toncoin (OTC)": {
+    "wins": 15,
+    "total": 24,
+    "ema_acc": 0.475
+  },
+  "USD/JPY": {
+    "wins": 0,
+    "total": 2,
+    "ema_acc": 0.486
+  },
+  "Axie Infinity (OTC)": {
+    "wins": 0,
     "total": 1,
-    "ema_acc": 0.64
+    "ema_acc": 0.54
   }
 }

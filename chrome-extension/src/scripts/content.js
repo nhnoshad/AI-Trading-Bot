@@ -408,23 +408,34 @@
       currentPrice = p;
     }
 
-    // Keep rolling 40-tick window for micro-second velocity lock
+    // Keep rolling 60-tick window for sub-second micro-tick microstructure analysis
     if (!pairRecentTicks[norm]) pairRecentTicks[norm] = [];
     const tBuf = pairRecentTicks[norm];
     tBuf.push({ price: p, ts: Date.now() });
-    if (tBuf.length > 40) tBuf.shift();
+    if (tBuf.length > 60) tBuf.shift();
   }
 
   function getRecentTickMetrics(pair) {
     const norm = normalizePairName(pair);
     const tBuf = pairRecentTicks[norm];
+    const defaultRes = {
+      velocity: 0.0,
+      acceleration: 0.0,
+      direction: 'FLAT',
+      is_decelerating: false,
+      intensity: 0.0,
+      is_surge: false,
+      entropy: 0.50,
+      ofi: 0.0,
+      tick_count: 0
+    };
     if (!tBuf || tBuf.length < 4) {
-      return { velocity: 0.0, acceleration: 0.0, direction: 'FLAT', is_decelerating: false };
+      return defaultRes;
     }
     const now = Date.now();
-    const recent = tBuf.filter(t => (now - t.ts) <= 10000);
+    const recent = tBuf.filter(t => (now - t.ts) <= 12000);
     if (recent.length < 3) {
-      return { velocity: 0.0, acceleration: 0.0, direction: 'FLAT', is_decelerating: false };
+      return defaultRes;
     }
     const first = recent[0];
     const last = recent[recent.length - 1];
@@ -433,6 +444,7 @@
     const scale = first.price > 1000 ? 0.1 : (first.price > 100 ? 0.02 : 0.0001);
     const vel = (dp / scale) / dt;
 
+    // Acceleration & Deceleration
     const midIdx = Math.floor(recent.length / 2);
     const midTick = recent[midIdx];
     const dt1 = Math.max(0.2, (midTick.ts - first.ts) / 1000);
@@ -442,11 +454,51 @@
     const accel = vel2 - vel1;
     const is_decel = Math.abs(vel2) < (0.45 * Math.abs(vel1)) && Math.abs(vel1) > 0.8;
 
+    // 1. Tick Arrival Intensity (λ = ticks / sec) & Algorithmic Surge
+    const intensity = Math.round((recent.length / dt) * 10) / 10;
+    const is_surge = intensity >= 4.0;
+
+    // 2. Order Flow Imbalance (OFI Proxy) & 3. Shannon Entropy of Micro-Ticks
+    let upTicks = 0;
+    let downTicks = 0;
+    let flatTicks = 0;
+    for (let i = 1; i < recent.length; i++) {
+      const diff = recent[i].price - recent[i - 1].price;
+      if (diff > 0.0000001) upTicks++;
+      else if (diff < -0.0000001) downTicks++;
+      else flatTicks++;
+    }
+    const totalDirTicks = upTicks + downTicks;
+    let ofi = 0.0;
+    if (totalDirTicks > 0) {
+      ofi = (upTicks - downTicks) / totalDirTicks;
+    }
+
+    // Shannon Entropy H = - sum(p * log2(p)), normalized to [0.0, 1.0]
+    // High entropy (close to 1.0) = noisy whipsaw alternating ticks (broker trap)
+    // Low entropy (close to 0.0) = strong unidirectional momentum consensus
+    let entropy = 0.50;
+    if (totalDirTicks >= 4) {
+      const pUp = upTicks / totalDirTicks;
+      const pDown = downTicks / totalDirTicks;
+      let h = 0.0;
+      if (pUp > 0.0001) h -= pUp * Math.log2(pUp);
+      if (pDown > 0.0001) h -= pDown * Math.log2(pDown);
+      entropy = Math.min(1.0, Math.max(0.0, h));
+    }
+
     return {
       velocity: Math.round(vel * 100) / 100,
       acceleration: Math.round(accel * 100) / 100,
       direction: vel > 0.3 ? 'UP' : (vel < -0.3 ? 'DOWN' : 'FLAT'),
-      is_decelerating: is_decel
+      is_decelerating: is_decel,
+      intensity: intensity,
+      is_surge: is_surge,
+      entropy: Math.round(entropy * 100) / 100,
+      ofi: Math.round(ofi * 100) / 100,
+      tick_count: recent.length,
+      up_ticks: upTicks,
+      down_ticks: downTicks
     };
   }
 

@@ -107,14 +107,19 @@ def analyze_multi_timeframe_5m(candles_1m: List[Dict[str, Any]]) -> Dict[str, An
 
 def analyze_micro_second_velocity(micro_ticks: Optional[Dict[str, Any]] = None, expected_dir: str = 'WAIT') -> Dict[str, Any]:
     """
-    Evaluates micro-second tick speed and deceleration between :50 and :59.
-    Detects last-second Quotex algorithmic spikes and exhaustion.
+    Evaluates micro-second tick speed, deceleration, Shannon entropy,
+    tick arrival intensity, and Order Flow Imbalance (OFI Proxy).
+    Detects last-second Quotex algorithmic spikes, whipsaw traps, and exhaustion.
     """
     default_res = {
         'micro_confirmed': True,
         'velocity': 0.0,
         'is_decelerating': False,
         'last_second_trap': False,
+        'intensity': 0.0,
+        'is_surge': False,
+        'entropy': 0.50,
+        'ofi': 0.0,
         'reasons': []
     }
     if not micro_ticks or not isinstance(micro_ticks, dict):
@@ -124,12 +129,17 @@ def analyze_micro_second_velocity(micro_ticks: Optional[Dict[str, Any]] = None, 
     accel = float(micro_ticks.get('acceleration', 0.0))
     tick_dir = str(micro_ticks.get('direction', 'FLAT')).upper()
     is_decel = bool(micro_ticks.get('is_decelerating', False))
+    intensity = float(micro_ticks.get('intensity', 0.0))
+    is_surge = bool(micro_ticks.get('is_surge', False))
+    entropy = float(micro_ticks.get('entropy', 0.50))
+    ofi = float(micro_ticks.get('ofi', 0.0))
+    tick_count = int(micro_ticks.get('tick_count', 0))
 
     reasons = []
     trap_detected = False
     confirmed = True
 
-    # Check for violent last-second counter-spike against the prediction
+    # 1. Check for violent last-second counter-spike against the prediction
     if expected_dir == 'BUY' and tick_dir == 'DOWN' and velocity < -2.0:
         trap_detected = True
         confirmed = False
@@ -141,11 +151,40 @@ def analyze_micro_second_velocity(micro_ticks: Optional[Dict[str, Any]] = None, 
     elif is_decel:
         reasons.append("Micro-Velocity: Deceleration detected at extreme wick — confirms momentum exhaustion")
 
+    # 2. Shannon Entropy Guard (High disorder = whipsaw chop / broker trap)
+    if entropy >= 0.88 and abs(ofi) < 0.18 and tick_count >= 6:
+        reasons.append(f"Micro-Tick Entropy: High disorder ({entropy:.2f}) — rapid alternating micro-ticks indicate broker trap / noise")
+
+    # 3. Order Flow Imbalance (OFI Proxy) divergence check
+    if expected_dir == 'BUY':
+        if ofi <= -0.50 and tick_count >= 5:
+            trap_detected = True
+            confirmed = False
+            reasons.append(f"Micro Order Flow Divergence: Signal is BUY but tick OFI is heavily negative ({ofi:+.2f}) — sellers dominating order flow!")
+        elif ofi >= 0.40:
+            reasons.append(f"Micro Order Flow (OFI {ofi:+.2f}): Heavy aggressive buyer dominance across tick stream")
+    elif expected_dir == 'SELL':
+        if ofi >= 0.50 and tick_count >= 5:
+            trap_detected = True
+            confirmed = False
+            reasons.append(f"Micro Order Flow Divergence: Signal is SELL but tick OFI is heavily positive ({ofi:+.2f}) — buyers dominating order flow!")
+        elif ofi <= -0.40:
+            reasons.append(f"Micro Order Flow (OFI {ofi:+.2f}): Heavy aggressive seller dominance across tick stream")
+
+    # 4. High-frequency tick arrival surge
+    if is_surge and ((expected_dir == 'BUY' and ofi > 0.25) or (expected_dir == 'SELL' and ofi < -0.25)):
+        reasons.append(f"Micro-Tick Surge: High-frequency tick arrival ({intensity:.1f} ticks/s) confirms breakout momentum!")
+
     return {
         'micro_confirmed': bool(confirmed),
         'velocity': round(float(velocity), 2),
+        'acceleration': round(float(accel), 2),
         'is_decelerating': bool(is_decel),
         'last_second_trap': bool(trap_detected),
+        'intensity': round(float(intensity), 1),
+        'is_surge': bool(is_surge),
+        'entropy': round(float(entropy), 2),
+        'ofi': round(float(ofi), 2),
         'reasons': reasons
     }
 
