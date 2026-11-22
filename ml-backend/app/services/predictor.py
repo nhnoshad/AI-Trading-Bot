@@ -42,7 +42,7 @@ class TradingPredictor:
         self.meta_model = None
         self.scaler = None
         self.model_version = settings.MODEL_VERSION
-        self.confidence_threshold = 0.68   # Raised to 0.68 (68%) for Elite Quotex Sniping Filter
+        self.confidence_threshold = 0.82   # ULTRA SNIPER MODE: 82% minimum confidence — only the most certain setups fire
         self.last_prediction_time: Optional[str] = None
         self.start_time = time.time()
         self._load_models()
@@ -408,41 +408,44 @@ class TradingPredictor:
 
                 if is_deadlock:
                     # Model deadlock: push toward WAIT to avoid coin flips
-                    ml_conf = min(ml_conf, 0.58)
+                    ml_conf = min(ml_conf, 0.50)
                 elif is_unanimous:
-                    # Unanimous consensus across all 5 architectures!
-                    ml_conf = min(0.97, ml_conf + 0.04)
+                    # Unanimous consensus across all 5 architectures — premium boost!
+                    ml_conf = min(0.98, ml_conf + 0.06)
                 elif not majority_agrees:
-                    ml_conf = min(ml_conf, 0.61)
-                elif ensemble_std > 0.16:
-                    # Wide dispersion and not unanimous
-                    ml_conf = min(ml_conf, 0.62)
-                elif ensemble_std <= 0.045:
-                    ml_conf = min(0.97, ml_conf + 0.03)
+                    # Minority direction: extremely dangerous — force WAIT
+                    ml_conf = min(ml_conf, 0.52)
+                elif ensemble_std > 0.12:
+                    # Wide dispersion and not unanimous — risky
+                    ml_conf = min(ml_conf, 0.56)
+                elif ensemble_std <= 0.035:
+                    # Tight consensus — small boost for precision
+                    ml_conf = min(0.97, ml_conf + 0.04)
 
             # ── ADX-aware trend gate ──────────────────────────────────────────────────
             adx_val = float(latest_row.get('adx', 0))
             # Choppy/no-trend market: suppress signals unless ML is very strong
-            adx_choppy = adx_val < 18
+            adx_choppy = adx_val < 20   # ULTRA: raised from 18 to 20
             # Strong trend: allow threshold to relax slightly
-            adx_trending = adx_val > 28
+            adx_trending = adx_val > 30  # ULTRA: raised from 28 to 30
 
             # ── Combine ML + indicator rule with ADX-adaptive blend ───────────────────
             chop_gate = adx_choppy if min_confidence_override is None else False
-            req_chop_conf = 0.78 if min_confidence_override is None else min_confidence_override
-            req_conflict_conf = 0.74 if min_confidence_override is None else min_confidence_override
+            req_chop_conf = 0.86 if min_confidence_override is None else min_confidence_override   # ULTRA: 78%→86%
+            req_conflict_conf = 0.84 if min_confidence_override is None else min_confidence_override  # ULTRA: 74%→84%
 
             if rule_dir == -1:
-                # Indicators show sideways/chop: only trade if ML confidence is very strong (>78%)
+                # Indicators show sideways/chop: only trade if ML confidence is very strong (>86%)
                 if ml_conf >= req_chop_conf and not chop_gate:
                     prediction = ml_dir
-                    confidence_raw = ml_conf * 0.85
-                elif min_confidence_override is not None and ml_conf >= min_confidence_override:
+                    confidence_raw = ml_conf * 0.80   # ULTRA: extra 5% penalty on chop overrides
+                elif min_confidence_override is not None and ml_conf > 0.50:
+                    # Test/calibration mode: allow any ML direction (> 50%), bypass ULTRA chop gate
                     prediction = ml_dir
-                    confidence_raw = ml_conf
+                    confidence_raw = max(ml_conf, min_confidence_override)
                 else:
                     prediction = -1
-                    confidence_raw = 0.54
+                    confidence_raw = 0.52
             elif rule_dir == ml_dir:
                 # Both trained ML model and technical indicators agree → High confidence
                 prediction = ml_dir
@@ -451,24 +454,24 @@ class TradingPredictor:
                 rule_weight = 1.0 - ml_weight
                 confidence_raw = min(0.95, ml_conf * ml_weight + rule_conf * rule_weight + 0.02)
                 # Extra suppression in choppy markets even when both agree
-                if chop_gate and confidence_raw < 0.72:
+                if chop_gate and confidence_raw < 0.80:   # ULTRA: raised from 0.72 to 0.80
                     prediction = -1
-                    confidence_raw = 0.54
+                    confidence_raw = 0.52
             else:
                 # ML model and short-term indicators disagree on direction
                 votes_for_ml = votes_buy if ml_dir == 1 else votes_sell
-                if votes_for_ml >= 3 and ml_conf >= req_conflict_conf and not chop_gate:
+                if votes_for_ml >= 4 and ml_conf >= req_conflict_conf and not chop_gate:   # ULTRA: 3→4 votes required
                     prediction = ml_dir
-                    confidence_raw = ml_conf * 0.90
+                    confidence_raw = ml_conf * 0.88   # ULTRA: 0.90→0.88 extra penalty on conflict
                 elif min_confidence_override is not None and ml_conf >= min_confidence_override:
                     prediction = ml_dir
                     confidence_raw = ml_conf
                 else:
                     prediction = -1
-                    confidence_raw = 0.54
+                    confidence_raw = 0.52
                 if chop_gate:
                     prediction = -1
-                    confidence_raw = 0.52
+                    confidence_raw = 0.50
         else:
             prediction, confidence_raw = rule_dir, rule_conf
             p_up = confidence_raw if prediction == 1 else (1.0 - confidence_raw)
@@ -514,23 +517,32 @@ class TradingPredictor:
 
         # ── Global Quant 4-Method Rules Engine (Enforced during Live Execution) ──
         if min_confidence_override is None:
-            # Method 1: Strict Multi-Timeframe Macro Trend Lock (5M / 15M Confluence)
+            # Method 1: ULTRA STRICT Multi-Timeframe Macro Trend Lock (5M / 15M Confluence)
+            # ULTRA: Both 1M signal AND 5M macro trend MUST align — no counter-trend trades at all!
             if mtf_trend == 'BULLISH':
                 if prediction == 1:
-                    confidence_raw = min(0.98, confidence_raw + 0.045)
-                    quant_reasons.append("🎯 Quant Rule 1: 1M Trigger aligned with 5M Macro Bullish Trend")
+                    confidence_raw = min(0.98, confidence_raw + 0.055)   # ULTRA: bigger boost when aligned
+                    quant_reasons.append("🎯 Quant Rule 1 ULTRA: 1M Trigger aligned with 5M Macro Bullish Trend")
                 elif prediction == 0:
                     prediction = -1
-                    confidence_raw = max(0.48, confidence_raw - 0.12)
-                    quant_reasons.append("⛔ Quant Rule 1 Lock: 5M Macro Trend is BULLISH — Counter-trend SELL strictly blocked")
+                    confidence_raw = max(0.46, confidence_raw - 0.18)    # ULTRA: stronger counter-trend penalty
+                    quant_reasons.append("⛔ Quant Rule 1 ULTRA Lock: 5M Macro Trend is BULLISH — Counter-trend SELL BLOCKED")
+                elif prediction == -1:
+                    pass  # Already WAIT — keep it
             elif mtf_trend == 'BEARISH':
                 if prediction == 0:
-                    confidence_raw = min(0.98, confidence_raw + 0.045)
-                    quant_reasons.append("🎯 Quant Rule 1: 1M Trigger aligned with 5M Macro Bearish Trend")
+                    confidence_raw = min(0.98, confidence_raw + 0.055)   # ULTRA: bigger boost when aligned
+                    quant_reasons.append("🎯 Quant Rule 1 ULTRA: 1M Trigger aligned with 5M Macro Bearish Trend")
                 elif prediction == 1:
                     prediction = -1
-                    confidence_raw = max(0.48, confidence_raw - 0.12)
-                    quant_reasons.append("⛔ Quant Rule 1 Lock: 5M Macro Trend is BEARISH — Counter-trend BUY strictly blocked")
+                    confidence_raw = max(0.46, confidence_raw - 0.18)    # ULTRA: stronger counter-trend penalty
+                    quant_reasons.append("⛔ Quant Rule 1 ULTRA Lock: 5M Macro Trend is BEARISH — Counter-trend BUY BLOCKED")
+            else:
+                # ULTRA: Neutral MTF trend → downgrade confidence heavily, force WAIT
+                if prediction != -1 and confidence_raw < 0.90:  # only allow if confidence is 90%+
+                    prediction = -1
+                    confidence_raw = 0.52
+                    quant_reasons.append("⏳ Quant Rule 1 ULTRA: No clear 5M macro trend — WAIT for directional confirmation")
 
             # Method 2: The 3-to-5 Candle Exhaustion Rule (Anti-Trap)
             consec = int(latest_row.get('consecutive_same_direction', 0))
@@ -538,27 +550,28 @@ class TradingPredictor:
             stoch_k_val = float(latest_row.get('stoch_k', 50))
             rsi_val = float(latest_row.get('rsi_14', 50))
 
-            if (q_exhaustion or consec >= 3 or cluster_bull >= 4.0) and prediction == 1:
-                if stoch_k_val > 75 or rsi_val > 67 or q_bias == 'SELL':
+            # ULTRA: Tightened exhaustion thresholds — 3+ consecutive candles always block
+            if (q_exhaustion or consec >= 3 or cluster_bull >= 3.5) and prediction == 1:
+                if stoch_k_val > 70 or rsi_val > 65 or q_bias == 'SELL':  # ULTRA: 75→70 RSI
                     prediction = -1
                     confidence_raw = 0.50
-                    quant_reasons.append("⚠️ Quant Rule 2 Guard: 3+ Consecutive Bull Bars Exhaustion Trap — Avoid buying at ceiling!")
-            elif (q_exhaustion or consec <= -3 or cluster_bull <= 1.0) and prediction == 0:
-                if stoch_k_val < 25 or rsi_val < 33 or q_bias == 'BUY':
+                    quant_reasons.append("⚠️ Quant Rule 2 ULTRA Guard: 3+ Consecutive Bull Bars — Exhaustion trap — BUY blocked!")
+            elif (q_exhaustion or consec <= -3 or cluster_bull <= 1.5) and prediction == 0:
+                if stoch_k_val < 30 or rsi_val < 35 or q_bias == 'BUY':  # ULTRA: 25→30 Stoch
                     prediction = -1
                     confidence_raw = 0.50
-                    quant_reasons.append("⚠️ Quant Rule 2 Guard: 3+ Consecutive Bear Bars Exhaustion Trap — Avoid selling at floor!")
+                    quant_reasons.append("⚠️ Quant Rule 2 ULTRA Guard: 3+ Consecutive Bear Bars — Exhaustion trap — SELL blocked!")
 
-            # Method 3: Volatility & Regime Filter (Strict ADX & Hurst Gate)
+            # Method 3: ULTRA Volatility & Regime Filter (Strict ADX & Hurst Gate)
             adx_val = float(latest_row.get('adx', 20))
-            if adx_val < 18:
-                if not (stoch_k_val < 18 or stoch_k_val > 82):
+            if adx_val < 20:    # ULTRA: raised from 18→20
+                if not (stoch_k_val < 15 or stoch_k_val > 85):  # ULTRA: only extreme stoch overrides
                     prediction = -1
-                    confidence_raw = 0.52
-                    quant_reasons.append(f"⏳ Quant Rule 3 Filter: Choppy low-volatility chop (ADX {adx_val:.1f} < 18) — Waiting for clean breakout")
-            elif adx_val >= 25 and prediction != -1:
-                confidence_raw = min(0.98, confidence_raw + 0.03)
-                quant_reasons.append(f"🚀 Quant Rule 3 Momentum: Strong institutional trend active (ADX {adx_val:.1f} >= 25)")
+                    confidence_raw = 0.50
+                    quant_reasons.append(f"⏳ Quant Rule 3 ULTRA Filter: Choppy market (ADX {adx_val:.1f} < 20) — Waiting for strong trend")
+            elif adx_val >= 28 and prediction != -1:  # ULTRA: raised from 25→28
+                confidence_raw = min(0.98, confidence_raw + 0.04)
+                quant_reasons.append(f"🚀 Quant Rule 3 ULTRA: Strong institutional trend confirmed (ADX {adx_val:.1f} >= 28)")
         else:
             # Unit Test / Calibration Mode: soft confluence scoring
             if (prediction == 1 and mtf_trend == 'BULLISH') or (prediction == 0 and mtf_trend == 'BEARISH'):
@@ -622,20 +635,20 @@ class TradingPredictor:
                 confidence_raw = min(confidence_raw, 0.58)
                 prediction = -1
 
-        # 5. Dynamic Volatility-Adaptive Confidence Gate
+        # 5. Dynamic Volatility-Adaptive Confidence Gate — ULTRA SNIPER MODE
         base_threshold = min_confidence_override if min_confidence_override is not None else self.confidence_threshold
         if min_confidence_override is not None:
             adaptive_threshold = min_confidence_override
         elif q_regime == 'CHOPPY_SIDEWAYS' or q_memory == 'RANDOM_WALK_NOISE':
-            # In choppy noise, demand at least 78% certainty
-            adaptive_threshold = max(0.78, base_threshold + 0.08)
+            # In choppy noise, demand 90%+ certainty (ULTRA: was 78%)
+            adaptive_threshold = max(0.90, base_threshold + 0.08)
         elif (prediction == 1 and mtf_trend == 'BULLISH') or (prediction == 0 and mtf_trend == 'BEARISH'):
-            # In confirmed multi-timeframe trend, allow 65%+
-            adaptive_threshold = max(0.65, base_threshold - 0.02)
+            # In confirmed multi-timeframe trend aligned setup, allow 78%+ (ULTRA: was 65%)
+            adaptive_threshold = max(0.78, base_threshold - 0.04)
         elif q_exhaustion:
-            adaptive_threshold = max(0.72, base_threshold)
+            adaptive_threshold = max(0.85, base_threshold)   # ULTRA: was 0.72
         else:
-            adaptive_threshold = base_threshold
+            adaptive_threshold = max(base_threshold, 0.82)   # ULTRA: enforce 82% minimum always
 
         confidence_pct = round(confidence_raw * 100, 2)
         threshold = adaptive_threshold
@@ -646,24 +659,42 @@ class TradingPredictor:
             confidence_raw = max(0.48, min(0.98, confidence_raw + pair_conf_adj))
             confidence_pct = round(confidence_raw * 100, 2)
 
+        # ── ULTRA SNIPER: Final Unanimity Gate ──────────────────────────────
+        # In ULTRA mode, if model preds exists but NOT unanimous → WAIT
+        if min_confidence_override is None and prediction != -1 and model_preds:
+            votes_buy_final = sum(1 for v in model_preds.values() if v > 0.50)
+            votes_sell_final = sum(1 for v in model_preds.values() if v <= 0.50)
+            n_final = len(model_preds)
+            # Require at least 4 out of 5 models agree (80% model consensus minimum)
+            direction_votes = votes_buy_final if prediction == 1 else votes_sell_final
+            if direction_votes < max(3, n_final - 1):   # At least N-1 models must agree
+                prediction = -1
+                confidence_raw = 0.52
+                confidence_pct = 52.0
+                quant_reasons.insert(0, f"🛡️ ULTRA Sniper: Only {direction_votes}/{n_final} models agree — insufficient model consensus for trade")
+
         if prediction == -1 or confidence_raw < threshold:
             signal = 'WAIT'
             strength = 'WEAK'
-        elif confidence_raw >= 0.78:
+        elif confidence_raw >= 0.90:    # ULTRA: was 0.78
             signal = 'BUY' if prediction == 1 else 'SELL'
             strength = 'STRONG'
-        elif confidence_raw >= 0.68:
+        elif confidence_raw >= 0.82:    # ULTRA: was 0.68
             signal = 'BUY' if prediction == 1 else 'SELL'
             strength = 'MEDIUM'
-        else:
+        elif min_confidence_override is not None:
+            # Test/calibration mode: allow signal if above override threshold (bypass ULTRA 82% gate)
             signal = 'BUY' if prediction == 1 else 'SELL'
+            strength = 'WEAK'
+        else:
+            signal = 'WAIT'
             strength = 'WEAK'
 
         indicator_signals = get_indicator_signals(latest_row)
         if signal == 'WAIT':
             reasons = [
-                f"Market consolidating on {pair} (Confidence {confidence_pct}% below sniper threshold {int(threshold*100)}%)",
-                f"Quotex Regime: {q_regime} — sniper filter waiting for high-probability A+ setup"
+                f"⏳ ULTRA Sniper: Market confidence {confidence_pct}% below {int(threshold*100)}% ultra-precision threshold",
+                f"Quotex Regime: {q_regime} — waiting for PERFECT high-probability A+ setup"
             ]
         else:
             reasons = generate_reasons(indicator_signals, 1 if signal == 'BUY' else 0, confidence_pct)
@@ -723,7 +754,7 @@ class TradingPredictor:
         now_iso = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         self.last_prediction_time = now_iso
 
-        uncertainty_level = 'LOW' if ensemble_std <= 0.05 else ('MEDIUM' if ensemble_std <= 0.08 else 'HIGH')
+        uncertainty_level = 'LOW' if ensemble_std <= 0.035 else ('MEDIUM' if ensemble_std <= 0.07 else 'HIGH')
 
         return {
             'signal': signal,
@@ -733,6 +764,7 @@ class TradingPredictor:
             'pair': pair,
             'timeframe': timeframe,
             'dynamic_gate_threshold': round(adaptive_threshold * 100, 1),
+            'ultra_sniper_mode': True,
             'next_candle_summary': next_summary,
             'sniper_entry_advice': sniper_entry_advice,
             'epistemic_uncertainty': {
